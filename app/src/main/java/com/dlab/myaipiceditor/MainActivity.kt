@@ -390,7 +390,10 @@ fun EditorScreen(
                         "rotate" -> onActionClick(EditorAction.RotateImage(90f))
                         "text" -> onActionClick(EditorAction.AddText("Sample", 50f, 50f))
                         "adjust" -> { /* TODO: Show adjustment controls */ }
-                        "ai" -> { /* TODO: Show AI tools */ }
+                        "ai_bg_removal" -> { /* TODO: Implement AI Background Removal */ }
+                        "ai_object_removal" -> { /* TODO: Implement AI Object Removal */ }
+                        "ai_enhancement" -> { /* TODO: Implement AI Photo Enhancement */ }
+                        "ai_upscaler" -> { /* TODO: Implement AI Photo Upscaler */ }
                     }
                 },
                 isProcessing = state.isProcessing
@@ -499,7 +502,10 @@ fun EditorBottomToolbar(
         ToolItem("rotate", "Rotate", Icons.AutoMirrored.Filled.RotateRight),
         ToolItem("text", "Text", Icons.Default.TextFields),
         ToolItem("adjust", "Adjust", Icons.Default.Tune),
-        ToolItem("ai", "AI Tools", Icons.Default.AutoAwesome)
+        ToolItem("ai_bg_removal", "AI Background Removal", Icons.Default.PhotoFilter),
+        ToolItem("ai_object_removal", "AI Object Removal", Icons.Default.AutoFixHigh),
+        ToolItem("ai_enhancement", "AI Photo Enhancement", Icons.Default.Face),
+        ToolItem("ai_upscaler", "AI Photo Upscaler", Icons.Default.ZoomIn)
     )
 
     Surface(
