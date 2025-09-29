@@ -45,6 +45,7 @@ import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dlab.myaipiceditor.data.EditorAction
 import com.dlab.myaipiceditor.ui.theme.MyAiPicEditorTheme
+import com.dlab.myaipiceditor.ui.CropScreen
 import com.dlab.myaipiceditor.viewmodel.EditorViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
@@ -68,11 +69,11 @@ class MainActivity : ComponentActivity() {
 
                 // Permission handling
                 val permissions = rememberMultiplePermissionsState(
-    permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-        listOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.CAMERA)
-    else
-        listOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.CAMERA)
-)
+                    permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                        listOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.CAMERA)
+                    else
+                        listOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.CAMERA)
+                )
 
                 // Image picker launcher
                 val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -139,6 +140,19 @@ class MainActivity : ComponentActivity() {
                         },
                         onSaveImage = { saveImageToGallery(state.currentImage!!) },
                         onShareImage = { shareImage(state.currentImage!!) }
+                    )
+                }
+
+                // Show crop screen when cropping
+                if (state.isCropping && state.currentImage != null) {
+                    CropScreen(
+                        bitmap = state.currentImage!!,
+                        onCropConfirm = { cropRect ->
+                            viewModel.handleAction(EditorAction.ConfirmCrop(cropRect))
+                        },
+                        onCancel = {
+                            viewModel.handleAction(EditorAction.CancelCrop)
+                        }
                     )
                 }
             }
@@ -372,7 +386,7 @@ fun EditorScreen(
             EditorBottomToolbar(
                 onToolClick = { tool ->
                     when (tool) {
-                        "crop" -> onActionClick(EditorAction.CropImage(0, 0, 100, 100))
+                        "crop" -> onActionClick(EditorAction.StartCrop)
                         "rotate" -> onActionClick(EditorAction.RotateImage(90f))
                         "filters" -> { /* TODO: Show filters */ }
                         "text" -> onActionClick(EditorAction.AddText("Sample", 50f, 50f))
