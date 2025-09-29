@@ -34,7 +34,7 @@ fun FeatureButtons(
         FeatureItem("Remove Object", Icons.Default.AutoFixHigh, EditorAction.RemoveObject, true),
         FeatureItem("Restore Face", Icons.Default.Face, EditorAction.RestoreFace, true),
         FeatureItem("Upscale Image", Icons.Default.ZoomIn, EditorAction.UpscaleImage, true),
-        FeatureItem("Crop", Icons.Default.Crop, EditorAction.CropImage(0, 0, 100, 100)),
+        FeatureItem("Crop", Icons.Default.Crop, EditorAction.StartCrop),
         FeatureItem("Resize", Icons.Default.AspectRatio, EditorAction.ResizeImage(800, 600)),
         FeatureItem("Add Text", Icons.Default.TextFields, EditorAction.AddText("Sample", 50f, 50f))
     )
