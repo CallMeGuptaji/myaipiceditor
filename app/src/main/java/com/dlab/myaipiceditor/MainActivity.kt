@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import androidx.activity.ComponentActivity
@@ -67,11 +68,11 @@ class MainActivity : ComponentActivity() {
 
                 // Permission handling
                 val permissions = rememberMultiplePermissionsState(
-                    permissions = listOf(
-                        Manifest.permission.READ_EXTERNAL_STORAGE,
-                        Manifest.permission.CAMERA
-                    )
-                )
+    permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+        listOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.CAMERA)
+    else
+        listOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.CAMERA)
+)
 
                 // Image picker launcher
                 val imagePickerLauncher = rememberLauncherForActivityResult(
