@@ -11,6 +11,7 @@ import com.dlab.myaipiceditor.ai.ImageUpscaler
 import com.dlab.myaipiceditor.ai.ObjectRemoval
 import com.dlab.myaipiceditor.data.EditorAction
 import com.dlab.myaipiceditor.data.EditorState
+import com.dlab.myaipiceditor.ui.CropRect
 import com.dlab.myaipiceditor.PhotoEditorUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,6 +33,9 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             is EditorAction.LoadImage -> {
                 // This will be handled by the UI when image is selected
             }
+            is EditorAction.StartCrop -> startCrop()
+            is EditorAction.CancelCrop -> cancelCrop()
+            is EditorAction.ConfirmCrop -> confirmCrop(action.cropRect)
             is EditorAction.RemoveBackground -> removeBackground()
             is EditorAction.RemoveObject -> {
                 // For now, we'll implement a simple version
@@ -40,7 +44,6 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             }
             is EditorAction.RestoreFace -> restoreFace()
             is EditorAction.UpscaleImage -> upscaleImage()
-            is EditorAction.CropImage -> cropImage(action.x, action.y, action.width, action.height)
             is EditorAction.ResizeImage -> resizeImage(action.width, action.height)
             is EditorAction.RotateImage -> rotateImage(action.degrees)
             is EditorAction.AddText -> addText(action.text, action.x, action.y)
@@ -60,6 +63,38 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             error = null
         )
         addToHistory(bitmap)
+    }
+    
+    private fun startCrop() {
+        _state.value = _state.value.copy(isCropping = true)
+    }
+    
+    private fun cancelCrop() {
+        _state.value = _state.value.copy(isCropping = false)
+    }
+    
+    private fun confirmCrop(cropRect: CropRect) {
+        val currentImage = _state.value.currentImage ?: return
+        
+        try {
+            val result = PhotoEditorUtils.crop(
+                currentImage, 
+                cropRect.left.toInt(), 
+                cropRect.top.toInt(), 
+                cropRect.width.toInt(), 
+                cropRect.height.toInt()
+            )
+            _state.value = _state.value.copy(
+                currentImage = result,
+                isCropping = false
+            )
+            addToHistory(result)
+        } catch (e: Exception) {
+            _state.value = _state.value.copy(
+                error = "Failed to crop image: ${e.message}",
+                isCropping = false
+            )
+        }
     }
     
     private fun removeBackground() {
@@ -187,18 +222,6 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                     error = "Failed to upscale image: ${e.message}"
                 )
             }
-        }
-    }
-    
-    private fun cropImage(x: Int, y: Int, width: Int, height: Int) {
-        val currentImage = _state.value.currentImage ?: return
-        
-        try {
-            val result = PhotoEditorUtils.crop(currentImage, x, y, width, height)
-            _state.value = _state.value.copy(currentImage = result)
-            addToHistory(result)
-        } catch (e: Exception) {
-            _state.value = _state.value.copy(error = "Failed to crop image: ${e.message}")
         }
     }
     
