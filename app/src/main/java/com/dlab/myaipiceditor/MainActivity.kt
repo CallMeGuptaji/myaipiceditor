@@ -388,10 +388,7 @@ fun EditorScreen(
                     when (tool) {
                         "crop" -> onActionClick(EditorAction.StartCrop)
                         "rotate" -> onActionClick(EditorAction.RotateImage(90f))
-                        "filters" -> { /* TODO: Show filters */ }
                         "text" -> onActionClick(EditorAction.AddText("Sample", 50f, 50f))
-                        "stickers" -> { /* TODO: Show stickers */ }
-                        "draw" -> { /* TODO: Enable drawing mode */ }
                         "adjust" -> { /* TODO: Show adjustment controls */ }
                         "ai" -> { /* TODO: Show AI tools */ }
                     }
@@ -500,10 +497,7 @@ fun EditorBottomToolbar(
     val tools = listOf(
         ToolItem("crop", "Crop", Icons.Default.Crop),
         ToolItem("rotate", "Rotate", Icons.AutoMirrored.Filled.RotateRight),
-        ToolItem("filters", "Filters", Icons.Default.FilterVintage),
         ToolItem("text", "Text", Icons.Default.TextFields),
-        ToolItem("stickers", "Stickers", Icons.Default.EmojiEmotions),
-        ToolItem("draw", "Draw", Icons.Default.Brush),
         ToolItem("adjust", "Adjust", Icons.Default.Tune),
         ToolItem("ai", "AI Tools", Icons.Default.AutoAwesome)
     )

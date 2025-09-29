@@ -40,22 +40,4 @@ object PhotoEditorUtils {
         canvas.drawText(text, x, y, paint)
         return output
     }
-
-    fun applyFilter(input: Bitmap): Bitmap {
-        // Simple brightness filter as example
-        val output = input.copy(Bitmap.Config.ARGB_8888, true)
-        val canvas = Canvas(output)
-        val paint = Paint().apply {
-            colorFilter = android.graphics.ColorMatrixColorFilter(
-                floatArrayOf(
-                    1.2f, 0f, 0f, 0f, 20f,
-                    0f, 1.2f, 0f, 0f, 20f,
-                    0f, 0f, 1.2f, 0f, 20f,
-                    0f, 0f, 0f, 1f, 0f
-                )
-            )
-        }
-        canvas.drawBitmap(input, 0f, 0f, paint)
-        return output
-    }
 }
