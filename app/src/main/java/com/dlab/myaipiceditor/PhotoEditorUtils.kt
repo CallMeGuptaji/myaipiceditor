@@ -5,6 +5,8 @@ import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Typeface
+import androidx.compose.ui.graphics.toArgb
+import com.dlab.myaipiceditor.data.TextStyle
 
 object PhotoEditorUtils {
 
@@ -38,6 +40,46 @@ object PhotoEditorUtils {
             this.setShadowLayer(4f, 2f, 2f, android.graphics.Color.BLACK)
         }
         canvas.drawText(text, x, y, paint)
+        return output
+    }
+
+    fun addStyledText(input: Bitmap, text: String, x: Float, y: Float, style: TextStyle): Bitmap {
+        val output = input.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(output)
+        
+        // Create paint for text
+        val textPaint = Paint().apply {
+            textSize = style.fontSize * (minOf(input.width, input.height) / 500f) // Scale based on image size
+            isAntiAlias = true
+            color = style.color.copy(alpha = style.opacity).toArgb()
+            typeface = if (style.isBold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            textAlign = Paint.Align.CENTER
+            setShadowLayer(4f, 2f, 2f, android.graphics.Color.BLACK)
+        }
+        
+        // Draw highlight background if needed
+        if (style.highlightColor.alpha > 0f) {
+            val highlightPaint = Paint().apply {
+                color = style.highlightColor.toArgb()
+                isAntiAlias = true
+            }
+            
+            val textBounds = android.graphics.Rect()
+            textPaint.getTextBounds(text, 0, text.length, textBounds)
+            
+            val padding = 16f
+            canvas.drawRoundRect(
+                x - textBounds.width() / 2f - padding,
+                y - textBounds.height() - padding,
+                x + textBounds.width() / 2f + padding,
+                y + padding,
+                12f, 12f,
+                highlightPaint
+            )
+        }
+        
+        // Draw text
+        canvas.drawText(text, x, y, textPaint)
         return output
     }
 }

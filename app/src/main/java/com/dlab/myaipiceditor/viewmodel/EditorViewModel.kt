@@ -11,6 +11,7 @@ import com.dlab.myaipiceditor.ai.ImageUpscaler
 import com.dlab.myaipiceditor.ai.ObjectRemoval
 import com.dlab.myaipiceditor.data.EditorAction
 import com.dlab.myaipiceditor.data.EditorState
+import com.dlab.myaipiceditor.data.TextStyle
 import com.dlab.myaipiceditor.ui.CropRect
 import com.dlab.myaipiceditor.PhotoEditorUtils
 import kotlinx.coroutines.Dispatchers
@@ -46,7 +47,13 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             is EditorAction.UpscaleImage -> upscaleImage()
             is EditorAction.ResizeImage -> resizeImage(action.width, action.height)
             is EditorAction.RotateImage -> rotateImage(action.degrees)
-            is EditorAction.AddText -> addText(action.text, action.x, action.y)
+            is EditorAction.StartAddText -> startAddText()
+            is EditorAction.CancelAddText -> cancelAddText()
+            is EditorAction.ConfirmText -> confirmText(action.text)
+            is EditorAction.StartTextStyling -> startTextStyling()
+            is EditorAction.CancelTextStyling -> cancelTextStyling()
+            is EditorAction.UpdateTextStyle -> updateTextStyle(action.style)
+            is EditorAction.ConfirmTextStyling -> confirmTextStyling()
             is EditorAction.Undo -> undo()
             is EditorAction.Redo -> redo()
             is EditorAction.SaveImage -> saveImage()
@@ -249,15 +256,71 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
     
-    private fun addText(text: String, x: Float, y: Float) {
+    private fun startAddText() {
+        _state.value = _state.value.copy(
+            isAddingText = true,
+            currentText = "",
+            currentTextStyle = TextStyle()
+        )
+    }
+    
+    private fun cancelAddText() {
+        _state.value = _state.value.copy(
+            isAddingText = false,
+            currentText = "",
+            currentTextStyle = TextStyle()
+        )
+    }
+    
+    private fun confirmText(text: String) {
+        _state.value = _state.value.copy(
+            isAddingText = false,
+            isStylingText = true,
+            currentText = text
+        )
+    }
+    
+    private fun startTextStyling() {
+        _state.value = _state.value.copy(isStylingText = true)
+    }
+    
+    private fun cancelTextStyling() {
+        _state.value = _state.value.copy(
+            isStylingText = false,
+            currentText = "",
+            currentTextStyle = TextStyle()
+        )
+    }
+    
+    private fun updateTextStyle(style: TextStyle) {
+        _state.value = _state.value.copy(currentTextStyle = style)
+    }
+    
+    private fun confirmTextStyling() {
         val currentImage = _state.value.currentImage ?: return
+        val text = _state.value.currentText
+        val style = _state.value.currentTextStyle
         
         try {
-            val result = PhotoEditorUtils.addText(currentImage, text, x, y, Typeface.DEFAULT_BOLD)
-            _state.value = _state.value.copy(currentImage = result)
+            // Calculate center position for text
+            val x = currentImage.width / 2f
+            val y = currentImage.height / 2f
+            
+            val result = PhotoEditorUtils.addStyledText(currentImage, text, x, y, style)
+            _state.value = _state.value.copy(
+                currentImage = result,
+                isStylingText = false,
+                currentText = "",
+                currentTextStyle = TextStyle()
+            )
             addToHistory(result)
         } catch (e: Exception) {
-            _state.value = _state.value.copy(error = "Failed to add text: ${e.message}")
+            _state.value = _state.value.copy(
+                error = "Failed to add text: ${e.message}",
+                isStylingText = false,
+                currentText = "",
+                currentTextStyle = TextStyle()
+            )
         }
     }
     

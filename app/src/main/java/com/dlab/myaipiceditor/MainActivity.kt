@@ -46,6 +46,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dlab.myaipiceditor.data.EditorAction
 import com.dlab.myaipiceditor.ui.theme.MyAiPicEditorTheme
 import com.dlab.myaipiceditor.ui.CropScreen
+import com.dlab.myaipiceditor.ui.TextEditorScreen
+import com.dlab.myaipiceditor.ui.TextStylingScreen
 import com.dlab.myaipiceditor.viewmodel.EditorViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
@@ -153,6 +155,39 @@ class MainActivity : ComponentActivity() {
                         onCancel = {
                             viewModel.handleAction(EditorAction.CancelCrop)
                         }
+                    )
+                }
+
+                // Show text editor screen when adding text
+                if (state.isAddingText) {
+                    TextEditorScreen(
+                        onTextConfirm = { text ->
+                            onActionClick(EditorAction.ConfirmText(text))
+                        },
+                        onCancel = {
+                            onActionClick(EditorAction.CancelAddText)
+                        }
+                    )
+                }
+
+                // Show text styling screen when styling text
+                if (state.isStylingText) {
+                    TextStylingScreen(
+                        text = state.currentText,
+                        currentStyle = state.currentTextStyle,
+                        onStyleChange = { style ->
+                            onActionClick(EditorAction.UpdateTextStyle(style))
+                        },
+                        onConfirm = {
+                            onActionClick(EditorAction.ConfirmTextStyling)
+                        },
+                        onCancel = {
+                            onActionClick(EditorAction.CancelTextStyling)
+                        },
+                        canUndo = state.canUndo,
+                        canRedo = state.canRedo,
+                        onUndo = { onActionClick(EditorAction.Undo) },
+                        onRedo = { onActionClick(EditorAction.Redo) }
                     )
                 }
             }
@@ -388,7 +423,7 @@ fun EditorScreen(
                     when (tool) {
                         "crop" -> onActionClick(EditorAction.StartCrop)
                         "rotate" -> onActionClick(EditorAction.RotateImage(90f))
-                        "text" -> onActionClick(EditorAction.AddText("Sample", 50f, 50f))
+                        "text" -> onActionClick(EditorAction.StartAddText)
                         "adjust" -> { /* TODO: Show adjustment controls */ }
                         "ai_bg_removal" -> { /* TODO: Implement AI Background Removal */ }
                         "ai_object_removal" -> { /* TODO: Implement AI Object Removal */ }
