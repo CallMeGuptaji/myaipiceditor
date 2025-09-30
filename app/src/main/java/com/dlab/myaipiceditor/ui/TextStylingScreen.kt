@@ -40,16 +40,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.dlab.myaipiceditor.data.TextStyle
+import com.dlab.myaipiceditor.data.TextPosition
 import android.graphics.Bitmap
 
 data class FontOption(
     val name: String,
     val fontFamily: FontFamily
-)
-
-data class TextPosition(
-    val x: Float = 0.5f, // Normalized position (0-1)
-    val y: Float = 0.5f  // Normalized position (0-1)
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
