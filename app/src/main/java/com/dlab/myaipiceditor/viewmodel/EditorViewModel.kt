@@ -12,6 +12,7 @@ import com.dlab.myaipiceditor.ai.ObjectRemoval
 import com.dlab.myaipiceditor.data.EditorAction
 import com.dlab.myaipiceditor.data.EditorState
 import com.dlab.myaipiceditor.data.TextStyle
+import com.dlab.myaipiceditor.data.TextPosition
 import com.dlab.myaipiceditor.ui.CropRect
 import com.dlab.myaipiceditor.PhotoEditorUtils
 import kotlinx.coroutines.Dispatchers
@@ -53,6 +54,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             is EditorAction.StartTextStyling -> startTextStyling()
             is EditorAction.CancelTextStyling -> cancelTextStyling()
             is EditorAction.UpdateTextStyle -> updateTextStyle(action.style)
+            is EditorAction.UpdateTextPosition -> updateTextPosition(action.position)
             is EditorAction.ConfirmTextStyling -> confirmTextStyling()
             is EditorAction.Undo -> undo()
             is EditorAction.Redo -> redo()
@@ -296,22 +298,28 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         _state.value = _state.value.copy(currentTextStyle = style)
     }
     
+    private fun updateTextPosition(position: TextPosition) {
+        _state.value = _state.value.copy(textPosition = position)
+    }
+    
     private fun confirmTextStyling() {
         val currentImage = _state.value.currentImage ?: return
         val text = _state.value.currentText
         val style = _state.value.currentTextStyle
+        val position = _state.value.textPosition
         
         try {
-            // Calculate center position for text
-            val x = currentImage.width / 2f
-            val y = currentImage.height / 2f
+            // Calculate actual position from normalized position
+            val x = position.x * currentImage.width
+            val y = position.y * currentImage.height
             
             val result = PhotoEditorUtils.addStyledText(currentImage, text, x, y, style)
             _state.value = _state.value.copy(
                 currentImage = result,
                 isStylingText = false,
                 currentText = "",
-                currentTextStyle = TextStyle()
+                currentTextStyle = TextStyle(),
+                textPosition = TextPosition()
             )
             addToHistory(result)
         } catch (e: Exception) {
@@ -319,7 +327,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 error = "Failed to add text: ${e.message}",
                 isStylingText = false,
                 currentText = "",
-                currentTextStyle = TextStyle()
+                currentTextStyle = TextStyle(),
+                textPosition = TextPosition()
             )
         }
     }

@@ -18,7 +18,13 @@ data class EditorState(
     val isAddingText: Boolean = false,
     val isStylingText: Boolean = false,
     val currentText: String = "",
-    val currentTextStyle: TextStyle = TextStyle()
+    val currentTextStyle: TextStyle = TextStyle(),
+    val textPosition: TextPosition = TextPosition()
+)
+
+data class TextPosition(
+    val x: Float = 0.5f, // Normalized position (0-1)
+    val y: Float = 0.5f  // Normalized position (0-1)
 )
 
 sealed class EditorAction {
@@ -39,6 +45,7 @@ sealed class EditorAction {
     object StartTextStyling : EditorAction()
     object CancelTextStyling : EditorAction()
     data class UpdateTextStyle(val style: TextStyle) : EditorAction()
+    data class UpdateTextPosition(val position: TextPosition) : EditorAction()
     object ConfirmTextStyling : EditorAction()
     object Undo : EditorAction()
     object Redo : EditorAction()

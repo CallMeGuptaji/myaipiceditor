@@ -174,9 +174,13 @@ class MainActivity : ComponentActivity() {
                 if (state.isStylingText) {
                     TextStylingScreen(
                         text = state.currentText,
+                        bitmap = state.currentImage,
                         currentStyle = state.currentTextStyle,
                         onStyleChange = { style ->
                             viewModel.handleAction(EditorAction.UpdateTextStyle(style))
+                        },
+                        onPositionChange = { position ->
+                            viewModel.handleAction(EditorAction.UpdateTextPosition(position))
                         },
                         onConfirm = {
                             viewModel.handleAction(EditorAction.ConfirmTextStyling)
