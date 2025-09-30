@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.platform.LocalConfiguration
 import com.dlab.myaipiceditor.data.TextStyle
 import com.dlab.myaipiceditor.data.TextPosition
 import android.graphics.Bitmap
@@ -70,7 +71,11 @@ fun TextStylingScreen(
     var textPosition by remember { mutableStateOf(TextPosition()) }
     var isDragging by remember { mutableStateOf(false) }
     var imageSize by remember { mutableStateOf(IntSize.Zero) }
-    
+
+    val configuration = LocalConfiguration.current
+    val screenHeightDp = configuration.screenHeightDp.dp
+    val sheetMaxHeight = screenHeightDp / 3
+
     val bottomSheetState = rememberBottomSheetScaffoldState()
     
     // Optimize updates - only call when values actually change
@@ -171,13 +176,19 @@ fun TextStylingScreen(
             )
         },
         sheetContent = {
-            BottomSheetContent(
-                textStyle = textStyle,
-                onStyleChange = { textStyle = it },
-                fontOptions = fontOptions,
-                colorOptions = colorOptions,
-                highlightOptions = highlightOptions
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = sheetMaxHeight)
+            ) {
+                BottomSheetContent(
+                    textStyle = textStyle,
+                    onStyleChange = { textStyle = it },
+                    fontOptions = fontOptions,
+                    colorOptions = colorOptions,
+                    highlightOptions = highlightOptions
+                )
+            }
         },
         sheetPeekHeight = 120.dp,
         modifier = modifier
