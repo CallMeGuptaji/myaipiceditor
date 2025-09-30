@@ -265,11 +265,6 @@ fun TextStylingScreen(
                             Box(
                                 modifier = Modifier
                                     .offset(x = xOffset, y = yOffset)
-                                    .background(
-                                        color = textStyle.highlightColor,
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                                    .padding(8.dp)
                                     .then(
                                         if (isDragging) {
                                             Modifier.zIndex(2f)
@@ -278,14 +273,23 @@ fun TextStylingScreen(
                                         }
                                     )
                             ) {
-                                Text(
-                                    text = text,
-                                    fontSize = textStyle.fontSize.sp,
-                                    fontFamily = textStyle.fontFamily,
-                                    fontWeight = if (textStyle.isBold) FontWeight.Bold else FontWeight.Normal,
-                                    color = textStyle.color.copy(alpha = textStyle.opacity),
-                                    textAlign = TextAlign.Center
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .background(
+                                            color = textStyle.highlightColor,
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                        .padding(8.dp)
+                                ) {
+                                    Text(
+                                        text = text,
+                                        fontSize = textStyle.fontSize.sp,
+                                        fontFamily = textStyle.fontFamily,
+                                        fontWeight = if (textStyle.isBold) FontWeight.Bold else FontWeight.Normal,
+                                        color = textStyle.color.copy(alpha = textStyle.opacity),
+                                        textAlign = TextAlign.Start
+                                    )
+                                }
                             }
                         }
                     }

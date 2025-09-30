@@ -6,6 +6,7 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.text.font.FontFamily
 import com.dlab.myaipiceditor.data.TextStyle
 
 object PhotoEditorUtils {
@@ -47,22 +48,36 @@ object PhotoEditorUtils {
         val output = input.copy(Bitmap.Config.ARGB_8888, true)
         val canvas = Canvas(output)
 
-        // Create paint for text
+        // Convert FontFamily to Typeface
+        val baseTypeface = when (style.fontFamily) {
+            FontFamily.Serif -> Typeface.SERIF
+            FontFamily.SansSerif -> Typeface.SANS_SERIF
+            FontFamily.Monospace -> Typeface.MONOSPACE
+            FontFamily.Cursive -> Typeface.create("cursive", Typeface.NORMAL)
+            else -> Typeface.DEFAULT
+        }
+
+        val typeface = if (style.isBold) {
+            Typeface.create(baseTypeface, Typeface.BOLD)
+        } else {
+            baseTypeface
+        }
+
+        // Create paint for text - use fontSize directly (it's already in sp/pts)
         val textPaint = Paint().apply {
-            textSize = style.fontSize * (minOf(input.width, input.height) / 500f) // Scale based on image size
-            isAntiAlias = true
-            color = style.color.copy(alpha = style.opacity).toArgb()
-            typeface = if (style.isBold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-            textAlign = Paint.Align.LEFT
-            setShadowLayer(4f, 2f, 2f, android.graphics.Color.BLACK)
+            this.textSize = style.fontSize
+            this.isAntiAlias = true
+            this.color = style.color.copy(alpha = style.opacity).toArgb()
+            this.typeface = typeface
+            this.textAlign = Paint.Align.LEFT
         }
 
         // Get text bounds for proper positioning
         val textBounds = android.graphics.Rect()
         textPaint.getTextBounds(text, 0, text.length, textBounds)
 
-        // Adjust y to account for text baseline
-        val adjustedY = y + textBounds.height()
+        // Account for 8dp padding (matches Compose preview)
+        val padding = 8f * 2f  // 8dp converted to pixels (approximate)
 
         // Draw highlight background if needed
         if (style.highlightColor.alpha > 0f) {
@@ -71,10 +86,9 @@ object PhotoEditorUtils {
                 isAntiAlias = true
             }
 
-            val padding = 16f
             canvas.drawRoundRect(
-                x - padding,
-                y - padding,
+                x,
+                y,
                 x + textBounds.width() + padding,
                 y + textBounds.height() + padding,
                 12f, 12f,
@@ -82,8 +96,10 @@ object PhotoEditorUtils {
             )
         }
 
-        // Draw text
-        canvas.drawText(text, x, adjustedY, textPaint)
+        // Draw text with padding offset to match Compose preview
+        val textX = x + (padding / 2f)
+        val textY = y + (padding / 2f) - textBounds.top
+        canvas.drawText(text, textX, textY, textPaint)
         return output
     }
 }
