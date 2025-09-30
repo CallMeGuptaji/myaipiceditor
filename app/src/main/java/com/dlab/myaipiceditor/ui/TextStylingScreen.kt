@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -29,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -66,10 +68,12 @@ fun TextStylingScreen(
 ) {
     var textStyle by remember { mutableStateOf(currentStyle) }
     var textPosition by remember { mutableStateOf(TextPosition()) }
+    var isDragging by remember { mutableStateOf(false) }
     var imageSize by remember { mutableStateOf(IntSize.Zero) }
     
     val bottomSheetState = rememberBottomSheetScaffoldState()
     
+    // Optimize updates - only call when values actually change
     LaunchedEffect(textStyle) {
         onStyleChange(textStyle)
     }
@@ -191,7 +195,31 @@ fun TextStylingScreen(
                         .onSizeChanged { size ->
                             imageSize = size
                         }
-                        .pointerInput(Unit) {
+                        .pointerInput(imageSize) {
+                            detectDragGestures(
+                                onDragStart = { offset ->
+                                    isDragging = true
+                                    if (imageSize.width > 0 && imageSize.height > 0) {
+                                        textPosition = TextPosition(
+                                            x = (offset.x / imageSize.width).coerceIn(0f, 1f),
+                                            y = (offset.y / imageSize.height).coerceIn(0f, 1f)
+                                        )
+                                    }
+                                },
+                                onDrag = { change, _ ->
+                                    if (imageSize.width > 0 && imageSize.height > 0) {
+                                        textPosition = TextPosition(
+                                            x = (change.position.x / imageSize.width).coerceIn(0f, 1f),
+                                            y = (change.position.y / imageSize.height).coerceIn(0f, 1f)
+                                        )
+                                    }
+                                },
+                                onDragEnd = {
+                                    isDragging = false
+                                }
+                            )
+                        }
+                        .pointerInput(imageSize) {
                             detectTapGestures { offset ->
                                 if (imageSize.width > 0 && imageSize.height > 0) {
                                     textPosition = TextPosition(
@@ -215,19 +243,29 @@ fun TextStylingScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .zIndex(1f)
+                                .zIndex(1f),
+                            contentAlignment = Alignment.TopStart
                         ) {
+                            // Use a more efficient positioning approach
+                            val density = LocalDensity.current
+                            val xOffset = with(density) { (textPosition.x * imageSize.width).toDp() }
+                            val yOffset = with(density) { (textPosition.y * imageSize.height).toDp() }
+                            
                             Box(
                                 modifier = Modifier
-                                    .offset(
-                                        x = (textPosition.x * imageSize.width).dp / LocalDensity.current.density,
-                                        y = (textPosition.y * imageSize.height).dp / LocalDensity.current.density
-                                    )
+                                    .offset(x = xOffset, y = yOffset)
                                     .background(
                                         color = textStyle.highlightColor,
                                         shape = RoundedCornerShape(8.dp)
                                     )
                                     .padding(8.dp)
+                                    .then(
+                                        if (isDragging) {
+                                            Modifier.zIndex(2f)
+                                        } else {
+                                            Modifier
+                                        }
+                                    )
                             ) {
                                 Text(
                                     text = text,
@@ -261,14 +299,15 @@ fun TextStylingScreen(
             Card(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(16.dp),
+                    .padding(16.dp)
+                    .zIndex(3f),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
                 ),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text(
-                    text = "Tap anywhere on the image to position your text",
+                    text = "Tap or drag to position your text",
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(12.dp),
                     color = MaterialTheme.colorScheme.onSurface
