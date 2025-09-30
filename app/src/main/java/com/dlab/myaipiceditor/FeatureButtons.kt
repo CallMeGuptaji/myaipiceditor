@@ -36,7 +36,7 @@ fun FeatureButtons(
         FeatureItem("Upscale Image", Icons.Default.ZoomIn, EditorAction.UpscaleImage, true),
         FeatureItem("Crop", Icons.Default.Crop, EditorAction.StartCrop),
         FeatureItem("Resize", Icons.Default.AspectRatio, EditorAction.ResizeImage(800, 600)),
-        FeatureItem("Add Text", Icons.Default.TextFields, EditorAction.AddText("Sample", 50f, 50f))
+        FeatureItem("Add Text", Icons.Default.TextFields, EditorAction.StartAddText)
     )
     
     LazyVerticalGrid(

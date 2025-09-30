@@ -162,10 +162,10 @@ class MainActivity : ComponentActivity() {
                 if (state.isAddingText) {
                     TextEditorScreen(
                         onTextConfirm = { text ->
-                            onActionClick(EditorAction.ConfirmText(text))
+                            viewModel.handleAction(EditorAction.ConfirmText(text))
                         },
                         onCancel = {
-                            onActionClick(EditorAction.CancelAddText)
+                            viewModel.handleAction(EditorAction.CancelAddText)
                         }
                     )
                 }
@@ -176,18 +176,18 @@ class MainActivity : ComponentActivity() {
                         text = state.currentText,
                         currentStyle = state.currentTextStyle,
                         onStyleChange = { style ->
-                            onActionClick(EditorAction.UpdateTextStyle(style))
+                            viewModel.handleAction(EditorAction.UpdateTextStyle(style))
                         },
                         onConfirm = {
-                            onActionClick(EditorAction.ConfirmTextStyling)
+                            viewModel.handleAction(EditorAction.ConfirmTextStyling)
                         },
                         onCancel = {
-                            onActionClick(EditorAction.CancelTextStyling)
+                            viewModel.handleAction(EditorAction.CancelTextStyling)
                         },
                         canUndo = state.canUndo,
                         canRedo = state.canRedo,
-                        onUndo = { onActionClick(EditorAction.Undo) },
-                        onRedo = { onActionClick(EditorAction.Redo) }
+                        onUndo = { viewModel.handleAction(EditorAction.Undo) },
+                        onRedo = { viewModel.handleAction(EditorAction.Redo) }
                     )
                 }
             }
