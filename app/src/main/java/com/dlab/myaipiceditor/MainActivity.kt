@@ -68,6 +68,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             MyAiPicEditorTheme {
                 val state by viewModel.state.collectAsStateWithLifecycle()
+                val density = LocalContext.current.resources.displayMetrics.density
+
+                LaunchedEffect(density) {
+                    viewModel.setDensity(density)
+                }
 
                 // Permission handling
                 val permissions = rememberMultiplePermissionsState(

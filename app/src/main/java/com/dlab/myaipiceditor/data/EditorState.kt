@@ -19,7 +19,8 @@ data class EditorState(
     val isStylingText: Boolean = false,
     val currentText: String = "",
     val currentTextStyle: TextStyle = TextStyle(),
-    val textPosition: TextPosition = TextPosition()
+    val textPosition: TextPosition = TextPosition(),
+    val density: Float = 2f
 )
 
 data class TextPosition(

@@ -44,7 +44,7 @@ object PhotoEditorUtils {
         return output
     }
 
-    fun addStyledText(input: Bitmap, text: String, x: Float, y: Float, style: TextStyle): Bitmap {
+    fun addStyledText(input: Bitmap, text: String, x: Float, y: Float, style: TextStyle, density: Float = 2f): Bitmap {
         val output = input.copy(Bitmap.Config.ARGB_8888, true)
         val canvas = Canvas(output)
 
@@ -63,9 +63,9 @@ object PhotoEditorUtils {
             baseTypeface
         }
 
-        // Create paint for text - use fontSize directly (it's already in sp/pts)
+        // Create paint for text - convert sp to pixels using density
         val textPaint = Paint().apply {
-            this.textSize = style.fontSize
+            this.textSize = style.fontSize * density
             this.isAntiAlias = true
             this.color = style.color.copy(alpha = style.opacity).toArgb()
             this.typeface = typeface
@@ -77,7 +77,7 @@ object PhotoEditorUtils {
         textPaint.getTextBounds(text, 0, text.length, textBounds)
 
         // Account for 8dp padding (matches Compose preview)
-        val padding = 8f * 2f  // 8dp converted to pixels (approximate)
+        val padding = 8f * density
 
         // Draw highlight background if needed
         if (style.highlightColor.alpha > 0f) {

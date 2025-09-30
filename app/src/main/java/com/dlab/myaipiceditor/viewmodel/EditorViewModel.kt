@@ -307,13 +307,14 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         val text = _state.value.currentText
         val style = _state.value.currentTextStyle
         val position = _state.value.textPosition
-        
+        val density = _state.value.density
+
         try {
             // Calculate actual position from normalized position
             val x = position.x * currentImage.width
             val y = position.y * currentImage.height
-            
-            val result = PhotoEditorUtils.addStyledText(currentImage, text, x, y, style)
+
+            val result = PhotoEditorUtils.addStyledText(currentImage, text, x, y, style, density)
             _state.value = _state.value.copy(
                 currentImage = result,
                 isStylingText = false,
@@ -331,6 +332,10 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 textPosition = TextPosition()
             )
         }
+    }
+
+    fun setDensity(density: Float) {
+        _state.value = _state.value.copy(density = density)
     }
     
     private fun addToHistory(bitmap: Bitmap) {
