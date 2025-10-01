@@ -9,6 +9,8 @@ import com.dlab.myaipiceditor.ai.BackgroundRemoval
 import com.dlab.myaipiceditor.ai.FaceRestoration
 import com.dlab.myaipiceditor.ai.ImageUpscaler
 import com.dlab.myaipiceditor.ai.ObjectRemoval
+import com.dlab.myaipiceditor.data.AdjustmentType
+import com.dlab.myaipiceditor.data.AdjustmentValues
 import com.dlab.myaipiceditor.data.EditorAction
 import com.dlab.myaipiceditor.data.EditorState
 import com.dlab.myaipiceditor.data.TextStyle
@@ -56,6 +58,10 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             is EditorAction.UpdateTextStyle -> updateTextStyle(action.style)
             is EditorAction.UpdateTextPosition -> updateTextPosition(action.position)
             is EditorAction.ConfirmTextStyling -> confirmTextStyling()
+            is EditorAction.StartAdjust -> startAdjust()
+            is EditorAction.CancelAdjust -> cancelAdjust()
+            is EditorAction.UpdateAdjustment -> updateAdjustment(action.type, action.value)
+            is EditorAction.ConfirmAdjust -> confirmAdjust()
             is EditorAction.Undo -> undo()
             is EditorAction.Redo -> redo()
             is EditorAction.SaveImage -> saveImage()
@@ -337,7 +343,57 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     fun setDensity(density: Float) {
         _state.value = _state.value.copy(density = density)
     }
-    
+
+    private fun startAdjust() {
+        _state.value = _state.value.copy(
+            isAdjusting = true,
+            adjustmentValues = AdjustmentValues(),
+            previewImage = _state.value.currentImage
+        )
+    }
+
+    private fun cancelAdjust() {
+        _state.value = _state.value.copy(
+            isAdjusting = false,
+            adjustmentValues = AdjustmentValues(),
+            previewImage = null
+        )
+    }
+
+    private fun updateAdjustment(type: AdjustmentType, value: Float) {
+        val currentImage = _state.value.currentImage ?: return
+        val newAdjustments = _state.value.adjustmentValues.setValue(type, value)
+
+        viewModelScope.launch {
+            try {
+                val result = withContext(Dispatchers.Default) {
+                    PhotoEditorUtils.applyAdjustments(currentImage, newAdjustments)
+                }
+
+                _state.value = _state.value.copy(
+                    previewImage = result,
+                    adjustmentValues = newAdjustments
+                )
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(
+                    error = "Failed to apply adjustment: ${e.message}"
+                )
+            }
+        }
+    }
+
+    private fun confirmAdjust() {
+        val previewImage = _state.value.previewImage ?: _state.value.currentImage ?: return
+
+        _state.value = _state.value.copy(
+            currentImage = previewImage,
+            isAdjusting = false,
+            adjustmentValues = AdjustmentValues(),
+            previewImage = null
+        )
+        addToHistory(previewImage)
+    }
+
     private fun addToHistory(bitmap: Bitmap) {
         // Remove any items after current index
         while (history.size > historyIndex + 1) {

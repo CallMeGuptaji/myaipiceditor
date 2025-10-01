@@ -2,12 +2,17 @@ package com.dlab.myaipiceditor
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontFamily
+import com.dlab.myaipiceditor.data.AdjustmentValues
 import com.dlab.myaipiceditor.data.TextStyle
+import kotlin.math.max
+import kotlin.math.min
 
 object PhotoEditorUtils {
 
@@ -100,6 +105,187 @@ object PhotoEditorUtils {
         val textX = x + (padding / 2f)
         val textY = y + (padding / 2f) - textBounds.top
         canvas.drawText(text, textX, textY, textPaint)
+        return output
+    }
+
+    fun applyAdjustments(input: Bitmap, adjustments: AdjustmentValues): Bitmap {
+        val output = input.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(output)
+
+        val colorMatrix = ColorMatrix()
+
+        // Apply brightness
+        if (adjustments.brightness != 0f) {
+            val brightnessMatrix = ColorMatrix().apply {
+                val value = adjustments.brightness * 2.55f
+                set(floatArrayOf(
+                    1f, 0f, 0f, 0f, value,
+                    0f, 1f, 0f, 0f, value,
+                    0f, 0f, 1f, 0f, value,
+                    0f, 0f, 0f, 1f, 0f
+                ))
+            }
+            colorMatrix.postConcat(brightnessMatrix)
+        }
+
+        // Apply contrast
+        if (adjustments.contrast != 0f) {
+            val contrastValue = (adjustments.contrast + 100f) / 100f
+            val offset = (1f - contrastValue) * 128f
+            val contrastMatrix = ColorMatrix().apply {
+                set(floatArrayOf(
+                    contrastValue, 0f, 0f, 0f, offset,
+                    0f, contrastValue, 0f, 0f, offset,
+                    0f, 0f, contrastValue, 0f, offset,
+                    0f, 0f, 0f, 1f, 0f
+                ))
+            }
+            colorMatrix.postConcat(contrastMatrix)
+        }
+
+        // Apply saturation
+        if (adjustments.saturation != 0f) {
+            val satValue = (adjustments.saturation + 100f) / 100f
+            val saturationMatrix = ColorMatrix()
+            saturationMatrix.setSaturation(satValue)
+            colorMatrix.postConcat(saturationMatrix)
+        }
+
+        // Apply warmth (temperature)
+        if (adjustments.warmth != 0f) {
+            val warmthValue = adjustments.warmth / 100f
+            val warmthMatrix = ColorMatrix().apply {
+                set(floatArrayOf(
+                    1f + warmthValue * 0.2f, 0f, 0f, 0f, 0f,
+                    0f, 1f, 0f, 0f, 0f,
+                    0f, 0f, 1f - warmthValue * 0.2f, 0f, 0f,
+                    0f, 0f, 0f, 1f, 0f
+                ))
+            }
+            colorMatrix.postConcat(warmthMatrix)
+        }
+
+        // Apply tint
+        if (adjustments.tint != 0f) {
+            val tintValue = adjustments.tint / 100f
+            val tintMatrix = ColorMatrix().apply {
+                set(floatArrayOf(
+                    1f, 0f, 0f, 0f, 0f,
+                    0f, 1f + tintValue * 0.2f, 0f, 0f, 0f,
+                    0f, 0f, 1f - tintValue * 0.2f, 0f, 0f,
+                    0f, 0f, 0f, 1f, 0f
+                ))
+            }
+            colorMatrix.postConcat(tintMatrix)
+        }
+
+        val paint = Paint().apply {
+            colorFilter = ColorMatrixColorFilter(colorMatrix)
+        }
+
+        canvas.drawBitmap(input, 0f, 0f, paint)
+
+        // Apply highlights and shadows
+        var result = output
+        if (adjustments.highlights != 0f || adjustments.shadows != 0f) {
+            result = applyHighlightsShadows(result, adjustments.highlights, adjustments.shadows)
+        }
+
+        // Apply sharpness
+        if (adjustments.sharpness != 0f) {
+            result = applySharpness(result, adjustments.sharpness)
+        }
+
+        return result
+    }
+
+    private fun applyHighlightsShadows(input: Bitmap, highlights: Float, shadows: Float): Bitmap {
+        val output = input.copy(Bitmap.Config.ARGB_8888, true)
+        val pixels = IntArray(input.width * input.height)
+        input.getPixels(pixels, 0, input.width, 0, 0, input.width, input.height)
+
+        val highlightFactor = highlights / 100f
+        val shadowFactor = shadows / 100f
+
+        for (i in pixels.indices) {
+            val pixel = pixels[i]
+            val r = (pixel shr 16) and 0xff
+            val g = (pixel shr 8) and 0xff
+            val b = pixel and 0xff
+            val a = (pixel shr 24) and 0xff
+
+            val luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255f
+
+            var newR = r
+            var newG = g
+            var newB = b
+
+            if (luminance > 0.5f && highlightFactor != 0f) {
+                val factor = (luminance - 0.5f) * 2f
+                val adjustment = highlightFactor * factor * 50f
+                newR = (r + adjustment).toInt().coerceIn(0, 255)
+                newG = (g + adjustment).toInt().coerceIn(0, 255)
+                newB = (b + adjustment).toInt().coerceIn(0, 255)
+            } else if (luminance <= 0.5f && shadowFactor != 0f) {
+                val factor = (0.5f - luminance) * 2f
+                val adjustment = shadowFactor * factor * 50f
+                newR = (r + adjustment).toInt().coerceIn(0, 255)
+                newG = (g + adjustment).toInt().coerceIn(0, 255)
+                newB = (b + adjustment).toInt().coerceIn(0, 255)
+            }
+
+            pixels[i] = (a shl 24) or (newR shl 16) or (newG shl 8) or newB
+        }
+
+        output.setPixels(pixels, 0, input.width, 0, 0, input.width, input.height)
+        return output
+    }
+
+    private fun applySharpness(input: Bitmap, sharpness: Float): Bitmap {
+        if (sharpness == 0f) return input
+
+        val output = input.copy(Bitmap.Config.ARGB_8888, true)
+        val pixels = IntArray(input.width * input.height)
+        input.getPixels(pixels, 0, input.width, 0, 0, input.width, input.height)
+
+        val amount = sharpness / 100f
+        val kernel = floatArrayOf(
+            0f, -amount, 0f,
+            -amount, 1f + 4f * amount, -amount,
+            0f, -amount, 0f
+        )
+
+        val tempPixels = pixels.clone()
+
+        for (y in 1 until input.height - 1) {
+            for (x in 1 until input.width - 1) {
+                var r = 0f
+                var g = 0f
+                var b = 0f
+
+                for (ky in -1..1) {
+                    for (kx in -1..1) {
+                        val idx = (y + ky) * input.width + (x + kx)
+                        val pixel = tempPixels[idx]
+                        val kernelIdx = (ky + 1) * 3 + (kx + 1)
+                        val kernelValue = kernel[kernelIdx]
+
+                        r += ((pixel shr 16) and 0xff) * kernelValue
+                        g += ((pixel shr 8) and 0xff) * kernelValue
+                        b += (pixel and 0xff) * kernelValue
+                    }
+                }
+
+                val idx = y * input.width + x
+                val a = (tempPixels[idx] shr 24) and 0xff
+                pixels[idx] = (a shl 24) or
+                        (r.toInt().coerceIn(0, 255) shl 16) or
+                        (g.toInt().coerceIn(0, 255) shl 8) or
+                        b.toInt().coerceIn(0, 255)
+            }
+        }
+
+        output.setPixels(pixels, 0, input.width, 0, 0, input.width, input.height)
         return output
     }
 }

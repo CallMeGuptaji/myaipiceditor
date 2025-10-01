@@ -45,6 +45,7 @@ import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dlab.myaipiceditor.data.EditorAction
 import com.dlab.myaipiceditor.ui.theme.MyAiPicEditorTheme
+import com.dlab.myaipiceditor.ui.AdjustScreen
 import com.dlab.myaipiceditor.ui.CropScreen
 import com.dlab.myaipiceditor.ui.TextEditorScreen
 import com.dlab.myaipiceditor.ui.TextStylingScreen
@@ -192,6 +193,27 @@ class MainActivity : ComponentActivity() {
                         },
                         onCancel = {
                             viewModel.handleAction(EditorAction.CancelTextStyling)
+                        },
+                        canUndo = state.canUndo,
+                        canRedo = state.canRedo,
+                        onUndo = { viewModel.handleAction(EditorAction.Undo) },
+                        onRedo = { viewModel.handleAction(EditorAction.Redo) }
+                    )
+                }
+
+                // Show adjust screen when adjusting
+                if (state.isAdjusting) {
+                    AdjustScreen(
+                        bitmap = state.previewImage ?: state.currentImage,
+                        adjustmentValues = state.adjustmentValues,
+                        onAdjustmentChange = { type, value ->
+                            viewModel.handleAction(EditorAction.UpdateAdjustment(type, value))
+                        },
+                        onConfirm = {
+                            viewModel.handleAction(EditorAction.ConfirmAdjust)
+                        },
+                        onCancel = {
+                            viewModel.handleAction(EditorAction.CancelAdjust)
                         },
                         canUndo = state.canUndo,
                         canRedo = state.canRedo,
@@ -433,7 +455,7 @@ fun EditorScreen(
                         "crop" -> onActionClick(EditorAction.StartCrop)
                         "rotate" -> onActionClick(EditorAction.RotateImage(90f))
                         "text" -> onActionClick(EditorAction.StartAddText)
-                        "adjust" -> { /* TODO: Show adjustment controls */ }
+                        "adjust" -> onActionClick(EditorAction.StartAdjust)
                         "ai_bg_removal" -> { /* TODO: Implement AI Background Removal */ }
                         "ai_object_removal" -> { /* TODO: Implement AI Object Removal */ }
                         "ai_enhancement" -> { /* TODO: Implement AI Photo Enhancement */ }

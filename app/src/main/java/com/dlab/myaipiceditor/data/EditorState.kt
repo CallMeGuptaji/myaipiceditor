@@ -20,7 +20,10 @@ data class EditorState(
     val currentText: String = "",
     val currentTextStyle: TextStyle = TextStyle(),
     val textPosition: TextPosition = TextPosition(),
-    val density: Float = 2f
+    val density: Float = 2f,
+    val isAdjusting: Boolean = false,
+    val adjustmentValues: AdjustmentValues = AdjustmentValues(),
+    val previewImage: Bitmap? = null
 )
 
 data class TextPosition(
@@ -48,6 +51,10 @@ sealed class EditorAction {
     data class UpdateTextStyle(val style: TextStyle) : EditorAction()
     data class UpdateTextPosition(val position: TextPosition) : EditorAction()
     object ConfirmTextStyling : EditorAction()
+    object StartAdjust : EditorAction()
+    object CancelAdjust : EditorAction()
+    data class UpdateAdjustment(val type: AdjustmentType, val value: Float) : EditorAction()
+    object ConfirmAdjust : EditorAction()
     object Undo : EditorAction()
     object Redo : EditorAction()
     object SaveImage : EditorAction()
