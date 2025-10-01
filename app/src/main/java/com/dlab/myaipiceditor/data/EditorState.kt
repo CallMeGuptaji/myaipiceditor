@@ -22,8 +22,7 @@ data class EditorState(
     val textPosition: TextPosition = TextPosition(),
     val density: Float = 2f,
     val isAdjusting: Boolean = false,
-    val adjustmentValues: AdjustmentValues = AdjustmentValues(),
-    val previewImage: Bitmap? = null
+    val adjustmentValues: AdjustmentValues = AdjustmentValues()
 )
 
 data class TextPosition(

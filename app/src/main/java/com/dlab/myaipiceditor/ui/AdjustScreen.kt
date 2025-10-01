@@ -3,6 +3,7 @@ package com.dlab.myaipiceditor.ui
 import android.graphics.Bitmap
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.ui.graphics.lerp as lerpColor
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,7 +22,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -67,7 +71,7 @@ fun AdjustScreen(
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Image Preview Area
+                // Image Preview Area with GPU-accelerated adjustments
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -78,11 +82,16 @@ fun AdjustScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     if (bitmap != null) {
+                        val colorMatrix = remember(adjustmentValues) {
+                            AdjustmentColorMatrix.createColorMatrix(adjustmentValues)
+                        }
+
                         Image(
                             bitmap = bitmap.asImageBitmap(),
                             contentDescription = "Image Preview",
                             modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Fit
+                            contentScale = ContentScale.Fit,
+                            colorFilter = ColorFilter.colorMatrix(colorMatrix)
                         )
                     } else {
                         Icon(
@@ -331,10 +340,16 @@ fun AdjustmentSliderPanel(
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var localValue by remember(adjustmentType) { mutableStateOf(currentValue) }
+    var sliderValue by remember(adjustmentType) { mutableStateOf(currentValue) }
 
-    LaunchedEffect(currentValue) {
-        localValue = currentValue
+    val animatedValue by animateFloatAsState(
+        targetValue = currentValue,
+        animationSpec = tween(durationMillis = 50, easing = LinearEasing),
+        label = "adjustment_animation"
+    )
+
+    LaunchedEffect(adjustmentType) {
+        sliderValue = currentValue
     }
     Surface(
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
@@ -385,7 +400,7 @@ fun AdjustmentSliderPanel(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = String.format("%.0f", localValue),
+                            text = String.format("%.0f", sliderValue),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -395,10 +410,10 @@ fun AdjustmentSliderPanel(
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (localValue != adjustmentType.defaultValue) {
+                    if (sliderValue != adjustmentType.defaultValue) {
                         FilledTonalButton(
                             onClick = {
-                                localValue = adjustmentType.defaultValue
+                                sliderValue = adjustmentType.defaultValue
                                 onValueChange(adjustmentType.defaultValue)
                             },
                             modifier = Modifier.height(36.dp),
@@ -440,9 +455,9 @@ fun AdjustmentSliderPanel(
                 )
 
                 Slider(
-                    value = localValue,
+                    value = sliderValue,
                     onValueChange = { value ->
-                        localValue = value
+                        sliderValue = value
                         onValueChange(value)
                     },
                     valueRange = adjustmentType.minValue..adjustmentType.maxValue,

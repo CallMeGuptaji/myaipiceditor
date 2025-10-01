@@ -204,7 +204,7 @@ class MainActivity : ComponentActivity() {
                 // Show adjust screen when adjusting
                 if (state.isAdjusting) {
                     AdjustScreen(
-                        bitmap = state.previewImage ?: state.currentImage,
+                        bitmap = state.currentImage,
                         adjustmentValues = state.adjustmentValues,
                         onAdjustmentChange = { type, value ->
                             viewModel.handleAction(EditorAction.UpdateAdjustment(type, value))

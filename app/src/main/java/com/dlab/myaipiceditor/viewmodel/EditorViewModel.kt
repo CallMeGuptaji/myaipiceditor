@@ -23,8 +23,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 
 class EditorViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -33,9 +31,6 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     private val history = mutableListOf<Bitmap>()
     private var historyIndex = -1
-
-    private var adjustmentJob: Job? = null
-    private var pendingAdjustments: AdjustmentValues? = null
     
     fun handleAction(action: EditorAction) {
         when (action) {
@@ -352,63 +347,63 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     private fun startAdjust() {
         _state.value = _state.value.copy(
             isAdjusting = true,
-            adjustmentValues = AdjustmentValues(),
-            previewImage = _state.value.currentImage
+            adjustmentValues = AdjustmentValues()
         )
     }
 
     private fun cancelAdjust() {
         _state.value = _state.value.copy(
             isAdjusting = false,
-            adjustmentValues = AdjustmentValues(),
-            previewImage = null
+            adjustmentValues = AdjustmentValues()
         )
     }
 
     private fun updateAdjustment(type: AdjustmentType, value: Float) {
-        val currentImage = _state.value.currentImage ?: return
         val newAdjustments = _state.value.adjustmentValues.setValue(type, value)
-
         _state.value = _state.value.copy(
             adjustmentValues = newAdjustments
         )
-
-        pendingAdjustments = newAdjustments
-
-        adjustmentJob?.cancel()
-        adjustmentJob = viewModelScope.launch {
-            delay(50)
-
-            val adjustmentsToApply = pendingAdjustments ?: return@launch
-
-            try {
-                val result = withContext(Dispatchers.Default) {
-                    PhotoEditorUtils.applyAdjustments(currentImage, adjustmentsToApply)
-                }
-
-                if (adjustmentsToApply == pendingAdjustments) {
-                    _state.value = _state.value.copy(
-                        previewImage = result
-                    )
-                }
-            } catch (e: Exception) {
-                _state.value = _state.value.copy(
-                    error = "Failed to apply adjustment: ${e.message}"
-                )
-            }
-        }
     }
 
     private fun confirmAdjust() {
-        val previewImage = _state.value.previewImage ?: _state.value.currentImage ?: return
+        val currentImage = _state.value.currentImage ?: return
+        val adjustments = _state.value.adjustmentValues
 
-        _state.value = _state.value.copy(
-            currentImage = previewImage,
-            isAdjusting = false,
-            adjustmentValues = AdjustmentValues(),
-            previewImage = null
-        )
-        addToHistory(previewImage)
+        if (adjustments == AdjustmentValues()) {
+            _state.value = _state.value.copy(
+                isAdjusting = false,
+                adjustmentValues = AdjustmentValues()
+            )
+            return
+        }
+
+        viewModelScope.launch {
+            _state.value = _state.value.copy(
+                isProcessing = true,
+                processingMessage = "Applying adjustments..."
+            )
+
+            try {
+                val result = withContext(Dispatchers.Default) {
+                    PhotoEditorUtils.applyAdjustments(currentImage, adjustments)
+                }
+
+                _state.value = _state.value.copy(
+                    currentImage = result,
+                    isAdjusting = false,
+                    adjustmentValues = AdjustmentValues(),
+                    isProcessing = false,
+                    processingMessage = ""
+                )
+                addToHistory(result)
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(
+                    isProcessing = false,
+                    processingMessage = "",
+                    error = "Failed to apply adjustments: ${e.message}"
+                )
+            }
+        }
     }
 
     private fun addToHistory(bitmap: Bitmap) {
