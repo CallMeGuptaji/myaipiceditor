@@ -23,14 +23,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 
 class EditorViewModel(application: Application) : AndroidViewModel(application) {
-    
+
     private val _state = MutableStateFlow(EditorState())
     val state: StateFlow<EditorState> = _state.asStateFlow()
-    
+
     private val history = mutableListOf<Bitmap>()
     private var historyIndex = -1
+
+    private var adjustmentJob: Job? = null
+    private var pendingAdjustments: AdjustmentValues? = null
     
     fun handleAction(action: EditorAction) {
         when (action) {
@@ -364,16 +369,28 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         val currentImage = _state.value.currentImage ?: return
         val newAdjustments = _state.value.adjustmentValues.setValue(type, value)
 
-        viewModelScope.launch {
+        _state.value = _state.value.copy(
+            adjustmentValues = newAdjustments
+        )
+
+        pendingAdjustments = newAdjustments
+
+        adjustmentJob?.cancel()
+        adjustmentJob = viewModelScope.launch {
+            delay(50)
+
+            val adjustmentsToApply = pendingAdjustments ?: return@launch
+
             try {
                 val result = withContext(Dispatchers.Default) {
-                    PhotoEditorUtils.applyAdjustments(currentImage, newAdjustments)
+                    PhotoEditorUtils.applyAdjustments(currentImage, adjustmentsToApply)
                 }
 
-                _state.value = _state.value.copy(
-                    previewImage = result,
-                    adjustmentValues = newAdjustments
-                )
+                if (adjustmentsToApply == pendingAdjustments) {
+                    _state.value = _state.value.copy(
+                        previewImage = result
+                    )
+                }
             } catch (e: Exception) {
                 _state.value = _state.value.copy(
                     error = "Failed to apply adjustment: ${e.message}"

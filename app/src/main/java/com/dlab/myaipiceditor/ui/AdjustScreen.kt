@@ -94,6 +94,8 @@ fun AdjustScreen(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(8.dp))
+
                 // Slider Panel - shows above toolbar when adjustment is selected
                 AnimatedVisibility(
                     visible = selectedAdjustment != null,
@@ -329,6 +331,11 @@ fun AdjustmentSliderPanel(
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var localValue by remember(adjustmentType) { mutableStateOf(currentValue) }
+
+    LaunchedEffect(currentValue) {
+        localValue = currentValue
+    }
     Surface(
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
         shadowElevation = 16.dp,
@@ -378,7 +385,7 @@ fun AdjustmentSliderPanel(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = String.format("%.0f", currentValue),
+                            text = String.format("%.0f", localValue),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -388,9 +395,12 @@ fun AdjustmentSliderPanel(
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (currentValue != adjustmentType.defaultValue) {
+                    if (localValue != adjustmentType.defaultValue) {
                         FilledTonalButton(
-                            onClick = { onValueChange(adjustmentType.defaultValue) },
+                            onClick = {
+                                localValue = adjustmentType.defaultValue
+                                onValueChange(adjustmentType.defaultValue)
+                            },
                             modifier = Modifier.height(36.dp),
                             contentPadding = PaddingValues(horizontal = 12.dp)
                         ) {
@@ -430,8 +440,11 @@ fun AdjustmentSliderPanel(
                 )
 
                 Slider(
-                    value = currentValue,
-                    onValueChange = onValueChange,
+                    value = localValue,
+                    onValueChange = { value ->
+                        localValue = value
+                        onValueChange(value)
+                    },
                     valueRange = adjustmentType.minValue..adjustmentType.maxValue,
                     modifier = Modifier.weight(1f),
                     colors = SliderDefaults.colors(
