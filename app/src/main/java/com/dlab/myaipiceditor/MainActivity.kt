@@ -46,7 +46,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dlab.myaipiceditor.data.EditorAction
 import com.dlab.myaipiceditor.ui.theme.MyAiPicEditorTheme
 import com.dlab.myaipiceditor.ui.AdjustScreen
-import com.dlab.myaipiceditor.ui.BackgroundReplacementScreen
 import com.dlab.myaipiceditor.ui.CropScreen
 import com.dlab.myaipiceditor.ui.TextEditorScreen
 import com.dlab.myaipiceditor.ui.TextStylingScreen
@@ -223,54 +222,6 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                // Show background removal screen
-                if (state.isRemovingBackground) {
-                    BackgroundReplacementScreen(
-                        originalImage = state.originalImage,
-                        currentImage = state.currentImage,
-                        currentMask = state.backgroundRemovalState.currentMask,
-                        backgroundMode = state.backgroundRemovalState.backgroundMode,
-                        selectedColor = state.backgroundRemovalState.selectedBackgroundColor,
-                        brushSize = state.backgroundRemovalState.brushSize,
-                        isErasing = state.backgroundRemovalState.isErasing,
-                        threshold = state.backgroundRemovalState.threshold,
-                        brushStrokes = state.backgroundRemovalState.brushStrokes,
-                        isProcessing = state.isProcessing,
-                        onBackClick = {
-                            viewModel.handleAction(EditorAction.CancelBackgroundRemoval)
-                        },
-                        onResetClick = {
-                            viewModel.handleAction(EditorAction.ResetBackgroundRemoval)
-                        },
-                        onConfirmClick = {
-                            viewModel.handleAction(EditorAction.ConfirmBackgroundRemoval)
-                        },
-                        onModeChange = { mode ->
-                            viewModel.handleAction(EditorAction.UpdateBackgroundMode(mode))
-                        },
-                        onColorChange = { color ->
-                            viewModel.handleAction(EditorAction.UpdateBackgroundColor(color))
-                        },
-                        onBrushSizeChange = { size ->
-                            viewModel.handleAction(EditorAction.UpdateBrushSize(size))
-                        },
-                        onErasingChange = { isErasing ->
-                            viewModel.handleAction(EditorAction.UpdateErasing(isErasing))
-                        },
-                        onThresholdChange = { threshold ->
-                            viewModel.handleAction(EditorAction.UpdateThreshold(threshold))
-                        },
-                        onBrushStroke = { start, end ->
-                            viewModel.handleAction(EditorAction.ApplyBrushStroke(start, end))
-                        },
-                        onBackgroundImageSelected = { bitmap ->
-                            viewModel.handleAction(EditorAction.UpdateBackgroundImage(bitmap))
-                        },
-                        onUndoStroke = {
-                            viewModel.handleAction(EditorAction.UndoBrushStroke)
-                        }
-                    )
-                }
             }
         }
     }
@@ -506,7 +457,6 @@ fun EditorScreen(
                         "rotate" -> onActionClick(EditorAction.RotateImage(90f))
                         "text" -> onActionClick(EditorAction.StartAddText)
                         "adjust" -> onActionClick(EditorAction.StartAdjust)
-                        "ai_bg_removal" -> onActionClick(EditorAction.StartBackgroundRemoval)
                         "ai_object_removal" -> onActionClick(EditorAction.RemoveObject)
                         "ai_enhancement" -> onActionClick(EditorAction.RestoreFace)
                         "ai_upscaler" -> onActionClick(EditorAction.UpscaleImage)
@@ -618,7 +568,6 @@ fun EditorBottomToolbar(
         ToolItem("rotate", "Rotate", Icons.AutoMirrored.Filled.RotateRight),
         ToolItem("text", "Text", Icons.Default.TextFields),
         ToolItem("adjust", "Adjust", Icons.Default.Tune),
-        ToolItem("ai_bg_removal", "AI Background Removal", Icons.Default.PhotoFilter),
         ToolItem("ai_object_removal", "AI Object Removal", Icons.Default.AutoFixHigh),
         ToolItem("ai_enhancement", "AI Photo Enhancement", Icons.Default.Face),
         ToolItem("ai_upscaler", "AI Photo Upscaler", Icons.Default.ZoomIn)
