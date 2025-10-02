@@ -5,21 +5,44 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.nio.FloatBuffer
 
 object BackgroundRemoval {
     private const val MODEL_NAME = "u2net.onnx"
     private const val INPUT_SIZE = 320
+    private const val PREVIEW_SIZE = 512
 
-    fun removeBackground(context: Context, input: Bitmap, threshold: Float = 0.5f): Bitmap {
+    suspend fun removeBackgroundAsync(context: Context, input: Bitmap, threshold: Float = 0.5f, usePreview: Boolean = true): Bitmap =
+        withContext(Dispatchers.Default) {
+            removeBackground(context, input, threshold, usePreview)
+        }
+
+    private fun removeBackground(context: Context, input: Bitmap, threshold: Float = 0.5f, usePreview: Boolean = true): Bitmap {
+        val workingImage = if (usePreview && (input.width > PREVIEW_SIZE || input.height > PREVIEW_SIZE)) {
+            val scale = PREVIEW_SIZE.toFloat() / maxOf(input.width, input.height)
+            Bitmap.createScaledBitmap(
+                input,
+                (input.width * scale).toInt(),
+                (input.height * scale).toInt(),
+                true
+            )
+        } else {
+            input
+        }
+
         val session = OnnxModelLoader.loadModel(context, MODEL_NAME)
         val env = OrtEnvironment.getEnvironment()
 
-        val preprocessed = preprocessBitmap(input)
+        val preprocessed = preprocessBitmap(workingImage)
         val inputTensor = OnnxTensor.createTensor(env, preprocessed)
 
         val output = session.run(mapOf(session.inputNames.first() to inputTensor))
         val outputTensor = output[0].value as Array<Array<Array<FloatArray>>>
+
+        inputTensor.close()
+        output.close()
 
         val mask = postprocessMask(outputTensor, input.width, input.height, threshold)
 
