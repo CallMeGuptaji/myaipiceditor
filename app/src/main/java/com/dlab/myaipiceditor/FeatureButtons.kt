@@ -30,7 +30,6 @@ fun FeatureButtons(
     modifier: Modifier = Modifier
 ) {
     val features = listOf(
-        FeatureItem("Remove Background", Icons.Default.PhotoFilter, EditorAction.RemoveBackground, true),
         FeatureItem("Remove Object", Icons.Default.AutoFixHigh, EditorAction.RemoveObject, true),
         FeatureItem("Restore Face", Icons.Default.Face, EditorAction.RestoreFace, true),
         FeatureItem("Upscale Image", Icons.Default.ZoomIn, EditorAction.UpscaleImage, true),
@@ -38,7 +37,7 @@ fun FeatureButtons(
         FeatureItem("Resize", Icons.Default.AspectRatio, EditorAction.ResizeImage(800, 600)),
         FeatureItem("Add Text", Icons.Default.TextFields, EditorAction.StartAddText)
     )
-    
+
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         contentPadding = PaddingValues(16.dp),
@@ -96,9 +95,9 @@ private fun FeatureButton(
                 },
                 modifier = Modifier.size(32.dp)
             )
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             Text(
                 text = feature.title,
                 style = MaterialTheme.typography.labelMedium,
@@ -109,7 +108,7 @@ private fun FeatureButton(
                     MaterialTheme.colorScheme.onSecondaryContainer
                 }
             )
-            
+
             if (feature.isAI) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
