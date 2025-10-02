@@ -2,6 +2,7 @@ package com.dlab.myaipiceditor.data
 
 import android.graphics.Bitmap
 import androidx.compose.runtime.Stable
+import androidx.compose.ui.geometry.Offset
 import com.dlab.myaipiceditor.ui.CropRect
 
 @Stable
@@ -22,8 +23,32 @@ data class EditorState(
     val textPosition: TextPosition = TextPosition(),
     val density: Float = 2f,
     val isAdjusting: Boolean = false,
-    val adjustmentValues: AdjustmentValues = AdjustmentValues()
+    val adjustmentValues: AdjustmentValues = AdjustmentValues(),
+    val isRemovingBackground: Boolean = false,
+    val backgroundRemovalState: BackgroundRemovalState = BackgroundRemovalState()
 )
+
+data class BackgroundRemovalState(
+    val currentMask: Bitmap? = null,
+    val backgroundMode: BackgroundMode = BackgroundMode.Auto,
+    val selectedBackgroundColor: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.White,
+    val backgroundImage: Bitmap? = null,
+    val brushSize: Float = 30f,
+    val isErasing: Boolean = true,
+    val threshold: Float = 0.5f,
+    val brushStrokes: List<BrushStroke> = emptyList()
+)
+
+data class BrushStroke(
+    val point: Offset,
+    val isErasing: Boolean
+)
+
+enum class BackgroundMode {
+    Auto,
+    Brush,
+    Replace
+}
 
 data class TextPosition(
     val x: Float = 0.5f, // Normalized position (0-1)
@@ -37,6 +62,18 @@ sealed class EditorAction {
     object CancelCrop : EditorAction()
     data class ConfirmCrop(val cropRect: CropRect) : EditorAction()
     object RemoveBackground : EditorAction()
+    object StartBackgroundRemoval : EditorAction()
+    object CancelBackgroundRemoval : EditorAction()
+    object ConfirmBackgroundRemoval : EditorAction()
+    object ResetBackgroundRemoval : EditorAction()
+    data class UpdateBackgroundMode(val mode: BackgroundMode) : EditorAction()
+    data class UpdateBackgroundColor(val color: androidx.compose.ui.graphics.Color) : EditorAction()
+    data class UpdateBackgroundImage(val bitmap: Bitmap) : EditorAction()
+    data class UpdateBrushSize(val size: Float) : EditorAction()
+    data class UpdateErasing(val isErasing: Boolean) : EditorAction()
+    data class UpdateThreshold(val threshold: Float) : EditorAction()
+    data class ApplyBrushStroke(val start: Offset, val end: Offset) : EditorAction()
+    object UndoBrushStroke : EditorAction()
     object RemoveObject : EditorAction()
     object RestoreFace : EditorAction()
     object UpscaleImage : EditorAction()

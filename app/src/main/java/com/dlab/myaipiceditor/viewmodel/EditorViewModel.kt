@@ -11,6 +11,8 @@ import com.dlab.myaipiceditor.ai.ImageUpscaler
 import com.dlab.myaipiceditor.ai.ObjectRemoval
 import com.dlab.myaipiceditor.data.AdjustmentType
 import com.dlab.myaipiceditor.data.AdjustmentValues
+import com.dlab.myaipiceditor.data.BackgroundMode
+import com.dlab.myaipiceditor.data.BrushStroke
 import com.dlab.myaipiceditor.data.EditorAction
 import com.dlab.myaipiceditor.data.EditorState
 import com.dlab.myaipiceditor.data.TextStyle
@@ -41,6 +43,18 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             is EditorAction.CancelCrop -> cancelCrop()
             is EditorAction.ConfirmCrop -> confirmCrop(action.cropRect)
             is EditorAction.RemoveBackground -> removeBackground()
+            is EditorAction.StartBackgroundRemoval -> startBackgroundRemoval()
+            is EditorAction.CancelBackgroundRemoval -> cancelBackgroundRemoval()
+            is EditorAction.ConfirmBackgroundRemoval -> confirmBackgroundRemoval()
+            is EditorAction.ResetBackgroundRemoval -> resetBackgroundRemoval()
+            is EditorAction.UpdateBackgroundMode -> updateBackgroundMode(action.mode)
+            is EditorAction.UpdateBackgroundColor -> updateBackgroundColor(action.color)
+            is EditorAction.UpdateBackgroundImage -> updateBackgroundImage(action.bitmap)
+            is EditorAction.UpdateBrushSize -> updateBrushSize(action.size)
+            is EditorAction.UpdateErasing -> updateErasing(action.isErasing)
+            is EditorAction.UpdateThreshold -> updateThreshold(action.threshold)
+            is EditorAction.ApplyBrushStroke -> applyBrushStroke(action.start, action.end)
+            is EditorAction.UndoBrushStroke -> undoBrushStroke()
             is EditorAction.RemoveObject -> {
                 // For now, we'll implement a simple version
                 // In a full implementation, user would select the object area
@@ -113,34 +127,230 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     }
     
     private fun removeBackground() {
+        startBackgroundRemoval()
+    }
+
+    private fun startBackgroundRemoval() {
         val currentImage = _state.value.currentImage ?: return
-        
+
         viewModelScope.launch {
             _state.value = _state.value.copy(
                 isProcessing = true,
-                processingMessage = "Removing background..."
+                processingMessage = "Processing background..."
             )
-            
+
             try {
-                val result = withContext(Dispatchers.Default) {
-                    BackgroundRemoval.removeBackground(getApplication(), currentImage)
+                val threshold = _state.value.backgroundRemovalState.threshold
+                val mask = withContext(Dispatchers.Default) {
+                    val result = BackgroundRemoval.removeBackground(getApplication(), currentImage, threshold)
+                    extractMaskFromTransparent(result)
                 }
-                
+
+                val preview = applyCurrentBackgroundSettings(currentImage, mask)
+
                 _state.value = _state.value.copy(
-                    currentImage = result,
+                    isRemovingBackground = true,
                     isProcessing = false,
-                    processingMessage = ""
+                    processingMessage = "",
+                    backgroundRemovalState = _state.value.backgroundRemovalState.copy(
+                        currentMask = mask
+                    ),
+                    currentImage = preview
                 )
-                addToHistory(result)
-                
             } catch (e: Exception) {
                 _state.value = _state.value.copy(
                     isProcessing = false,
                     processingMessage = "",
-                    error = "Failed to remove background: ${e.message}"
+                    error = "Failed to process background: ${e.message}"
                 )
             }
         }
+    }
+
+    private fun cancelBackgroundRemoval() {
+        val originalImage = history.getOrNull(historyIndex)
+        _state.value = _state.value.copy(
+            isRemovingBackground = false,
+            currentImage = originalImage,
+            backgroundRemovalState = com.dlab.myaipiceditor.data.BackgroundRemovalState()
+        )
+    }
+
+    private fun confirmBackgroundRemoval() {
+        val currentImage = _state.value.currentImage ?: return
+        _state.value = _state.value.copy(
+            isRemovingBackground = false,
+            backgroundRemovalState = com.dlab.myaipiceditor.data.BackgroundRemovalState()
+        )
+        addToHistory(currentImage)
+    }
+
+    private fun resetBackgroundRemoval() {
+        startBackgroundRemoval()
+    }
+
+    private fun updateBackgroundMode(mode: BackgroundMode) {
+        val currentImage = _state.value.originalImage ?: return
+        val mask = _state.value.backgroundRemovalState.currentMask ?: return
+
+        _state.value = _state.value.copy(
+            backgroundRemovalState = _state.value.backgroundRemovalState.copy(
+                backgroundMode = mode
+            )
+        )
+
+        updatePreview(currentImage, mask)
+    }
+
+    private fun updateBackgroundColor(color: androidx.compose.ui.graphics.Color) {
+        val currentImage = _state.value.originalImage ?: return
+        val mask = _state.value.backgroundRemovalState.currentMask ?: return
+
+        _state.value = _state.value.copy(
+            backgroundRemovalState = _state.value.backgroundRemovalState.copy(
+                selectedBackgroundColor = color
+            )
+        )
+
+        updatePreview(currentImage, mask)
+    }
+
+    private fun updateBackgroundImage(bitmap: Bitmap) {
+        val currentImage = _state.value.originalImage ?: return
+        val mask = _state.value.backgroundRemovalState.currentMask ?: return
+
+        _state.value = _state.value.copy(
+            backgroundRemovalState = _state.value.backgroundRemovalState.copy(
+                backgroundImage = bitmap,
+                backgroundMode = BackgroundMode.Replace
+            )
+        )
+
+        updatePreview(currentImage, mask)
+    }
+
+    private fun updateBrushSize(size: Float) {
+        _state.value = _state.value.copy(
+            backgroundRemovalState = _state.value.backgroundRemovalState.copy(
+                brushSize = size
+            )
+        )
+    }
+
+    private fun updateErasing(isErasing: Boolean) {
+        _state.value = _state.value.copy(
+            backgroundRemovalState = _state.value.backgroundRemovalState.copy(
+                isErasing = isErasing
+            )
+        )
+    }
+
+    private fun updateThreshold(threshold: Float) {
+        _state.value = _state.value.copy(
+            backgroundRemovalState = _state.value.backgroundRemovalState.copy(
+                threshold = threshold
+            )
+        )
+
+        val currentImage = _state.value.originalImage ?: return
+        startBackgroundRemoval()
+    }
+
+    private fun applyBrushStroke(start: androidx.compose.ui.geometry.Offset, end: androidx.compose.ui.geometry.Offset) {
+        val mask = _state.value.backgroundRemovalState.currentMask ?: return
+        val brushSize = _state.value.backgroundRemovalState.brushSize
+        val isErasing = _state.value.backgroundRemovalState.isErasing
+
+        viewModelScope.launch {
+            try {
+                val updatedMask = withContext(Dispatchers.Default) {
+                    BackgroundRemoval.refineMaskWithBrush(mask, end.x, end.y, brushSize, isErasing)
+                }
+
+                val strokes = _state.value.backgroundRemovalState.brushStrokes.toMutableList()
+                strokes.add(BrushStroke(end, isErasing))
+
+                _state.value = _state.value.copy(
+                    backgroundRemovalState = _state.value.backgroundRemovalState.copy(
+                        currentMask = updatedMask,
+                        brushStrokes = strokes
+                    )
+                )
+
+                val currentImage = _state.value.originalImage ?: return@launch
+                updatePreview(currentImage, updatedMask)
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(
+                    error = "Failed to apply brush stroke: ${e.message}"
+                )
+            }
+        }
+    }
+
+    private fun undoBrushStroke() {
+        val strokes = _state.value.backgroundRemovalState.brushStrokes
+        if (strokes.isEmpty()) return
+
+        val newStrokes = strokes.dropLast(1)
+        _state.value = _state.value.copy(
+            backgroundRemovalState = _state.value.backgroundRemovalState.copy(
+                brushStrokes = newStrokes
+            )
+        )
+    }
+
+    private fun updatePreview(image: Bitmap, mask: Bitmap) {
+        viewModelScope.launch {
+            try {
+                val preview = withContext(Dispatchers.Default) {
+                    applyCurrentBackgroundSettings(image, mask)
+                }
+                _state.value = _state.value.copy(currentImage = preview)
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(
+                    error = "Failed to update preview: ${e.message}"
+                )
+            }
+        }
+    }
+
+    private fun applyCurrentBackgroundSettings(image: Bitmap, mask: Bitmap): Bitmap {
+        val mode = _state.value.backgroundRemovalState.backgroundMode
+        val color = _state.value.backgroundRemovalState.selectedBackgroundColor
+        val bgImage = _state.value.backgroundRemovalState.backgroundImage
+
+        return when (mode) {
+            BackgroundMode.Auto -> {
+                BackgroundRemoval.applyBackgroundColor(image, mask, android.graphics.Color.TRANSPARENT)
+            }
+            BackgroundMode.Brush -> {
+                BackgroundRemoval.applyBackgroundColor(image, mask, android.graphics.Color.TRANSPARENT)
+            }
+            BackgroundMode.Replace -> {
+                if (bgImage != null) {
+                    BackgroundRemoval.applyBackgroundImage(image, mask, bgImage)
+                } else {
+                    val androidColor = android.graphics.Color.rgb(
+                        (color.red * 255).toInt(),
+                        (color.green * 255).toInt(),
+                        (color.blue * 255).toInt()
+                    )
+                    BackgroundRemoval.applyBackgroundColor(image, mask, androidColor)
+                }
+            }
+        }
+    }
+
+    private fun extractMaskFromTransparent(bitmap: Bitmap): Bitmap {
+        val mask = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+        for (y in 0 until bitmap.height) {
+            for (x in 0 until bitmap.width) {
+                val pixel = bitmap.getPixel(x, y)
+                val alpha = android.graphics.Color.alpha(pixel)
+                mask.setPixel(x, y, android.graphics.Color.argb(alpha, 255, 255, 255))
+            }
+        }
+        return mask
     }
     
     private fun removeObject() {
