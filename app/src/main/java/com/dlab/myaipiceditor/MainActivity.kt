@@ -235,6 +235,7 @@ class MainActivity : ComponentActivity() {
                         isErasing = state.backgroundRemovalState.isErasing,
                         threshold = state.backgroundRemovalState.threshold,
                         brushStrokes = state.backgroundRemovalState.brushStrokes,
+                        isProcessing = state.isProcessing,
                         onBackClick = {
                             viewModel.handleAction(EditorAction.CancelBackgroundRemoval)
                         },
