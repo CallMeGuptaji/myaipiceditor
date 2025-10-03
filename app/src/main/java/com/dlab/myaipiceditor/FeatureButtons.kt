@@ -30,7 +30,7 @@ fun FeatureButtons(
     modifier: Modifier = Modifier
 ) {
     val features = listOf(
-        FeatureItem("Remove Object", Icons.Default.AutoFixHigh, EditorAction.RemoveObject, true),
+        FeatureItem("Remove Object", Icons.Default.AutoFixHigh, EditorAction.StartObjectRemoval, true),
         FeatureItem("Restore Face", Icons.Default.Face, EditorAction.RestoreFace, true),
         FeatureItem("Upscale Image", Icons.Default.ZoomIn, EditorAction.UpscaleImage, true),
         FeatureItem("Crop", Icons.Default.Crop, EditorAction.StartCrop),

@@ -262,7 +262,8 @@ fun DrawableMaskCanvas(
                 .pointerInput(brushSize, isEraserMode) {
                     detectDragGestures(
                         onDragStart = { tapOffset ->
-                            val imageRect = getImageRect(size, bitmap)
+                            val canvasSize = androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat())
+                            val imageRect = getImageRect(canvasSize, bitmap)
                             val adjustedOffset = Offset(
                                 (tapOffset.x - imageRect.left) / imageRect.width,
                                 (tapOffset.y - imageRect.top) / imageRect.height
@@ -273,7 +274,8 @@ fun DrawableMaskCanvas(
                             }
                         },
                         onDrag = { change, _ ->
-                            val imageRect = getImageRect(size, bitmap)
+                            val canvasSize = androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat())
+                            val imageRect = getImageRect(canvasSize, bitmap)
                             val adjustedOffset = Offset(
                                 (change.position.x - imageRect.left) / imageRect.width,
                                 (change.position.y - imageRect.top) / imageRect.height
