@@ -117,20 +117,6 @@ object AiModelManager {
             setInterOpNumThreads(1)
             setOptimizationLevel(OrtSession.SessionOptions.OptLevel.BASIC_OPT)
             setExecutionMode(OrtSession.SessionOptions.ExecutionMode.SEQUENTIAL)
-
-            try {
-                disableMemPattern()
-                Log.d(TAG, "Memory pattern disabled for LaMa")
-            } catch (e: Exception) {
-                Log.w(TAG, "Could not disable memory pattern: ${e.message}")
-            }
-
-            try {
-                disableCpuMemArena()
-                Log.d(TAG, "CPU memory arena disabled for LaMa")
-            } catch (e: Exception) {
-                Log.w(TAG, "Could not disable CPU memory arena: ${e.message}")
-            }
         }
 
         return ortEnvironment.createSession(modelFile.absolutePath, sessionOptions)
@@ -161,13 +147,6 @@ object AiModelManager {
             setInterOpNumThreads(1)
             setOptimizationLevel(OrtSession.SessionOptions.OptLevel.NO_OPT)
             setExecutionMode(OrtSession.SessionOptions.ExecutionMode.SEQUENTIAL)
-
-            try {
-                disableMemPattern()
-                disableCpuMemArena()
-            } catch (e: Exception) {
-                Log.w(TAG, "Could not apply conservative settings: ${e.message}")
-            }
         }
 
         return ortEnvironment.createSession(modelFile.absolutePath, sessionOptions)
