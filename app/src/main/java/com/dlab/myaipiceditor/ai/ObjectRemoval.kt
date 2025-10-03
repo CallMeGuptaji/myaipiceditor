@@ -13,7 +13,7 @@ object ObjectRemoval {
     private const val TAG = "ObjectRemoval"
     private const val MODEL_INPUT_SIZE = 512
 
-    fun removeObject(context: Context, input: Bitmap, mask: Bitmap): Bitmap {
+    suspend fun removeObject(context: Context, input: Bitmap, mask: Bitmap): Bitmap {
         Log.d(TAG, "Starting object removal - Input: ${input.width}x${input.height}")
 
         try {

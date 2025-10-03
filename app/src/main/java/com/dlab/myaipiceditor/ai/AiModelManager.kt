@@ -6,6 +6,8 @@ import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
@@ -16,7 +18,10 @@ object AiModelManager {
 
     private lateinit var ortEnvironment: OrtEnvironment
     private val modelSessions = mutableMapOf<ModelType, OrtSession>()
+    private val loadingMutex = Mutex()
     private var isInitialized = false
+    private lateinit var appContext: Context
+    private lateinit var cacheDir: File
 
     enum class ModelType(val fileName: String) {
         FACE_RESTORATION("GFPGANv1.4.onnx"),
@@ -32,67 +37,140 @@ object AiModelManager {
 
         try {
             Log.d(TAG, "Initializing AiModelManager...")
+            appContext = context.applicationContext
             ortEnvironment = OrtEnvironment.getEnvironment()
 
-            val cacheDir = File(context.filesDir, MODELS_CACHE_DIR)
+            cacheDir = File(appContext.filesDir, MODELS_CACHE_DIR)
             if (!cacheDir.exists()) {
                 cacheDir.mkdirs()
             }
 
-            ModelType.values().forEach { modelType ->
-                loadModel(context, modelType, cacheDir)
-            }
+            loadModelSequentially(ModelType.FACE_RESTORATION)
 
             isInitialized = true
-            Log.d(TAG, "AiModelManager initialized successfully")
+            Log.d(TAG, "AiModelManager initialized (lazy loading enabled for other models)")
         } catch (e: Exception) {
-            Log.e(TAG, "Error initializing AiModelManager", e)
+            Log.e(TAG, "Error initializing AiModelManager: ${e.message}", e)
             throw e
         }
     }
 
-    private fun loadModel(context: Context, modelType: ModelType, cacheDir: File) {
-        try {
-            Log.d(TAG, "Loading model: ${modelType.fileName}")
-
-            val cachedModelFile = File(cacheDir, modelType.fileName)
-
-            if (!cachedModelFile.exists()) {
-                Log.d(TAG, "Copying ${modelType.fileName} to cache...")
-                copyModelFromAssets(context, modelType.fileName, cachedModelFile)
-            } else {
-                Log.d(TAG, "${modelType.fileName} already cached")
+    private suspend fun loadModelSequentially(modelType: ModelType) = withContext(Dispatchers.IO) {
+        loadingMutex.withLock {
+            if (modelSessions.containsKey(modelType)) {
+                Log.d(TAG, "Model ${modelType.fileName} already loaded")
+                return@withContext
             }
 
-            val sessionOptions = OrtSession.SessionOptions().apply {
-                setIntraOpNumThreads(4)
-                setInterOpNumThreads(4)
-                setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+            try {
+                Log.d(TAG, "Loading model: ${modelType.fileName}")
 
-                if (modelType == ModelType.OBJECT_REMOVAL) {
-                    Log.d(TAG, "Using CPU execution provider for ${modelType.fileName} (NNAPI incompatible)")
+                val cachedModelFile = File(cacheDir, modelType.fileName)
+
+                if (!cachedModelFile.exists()) {
+                    Log.d(TAG, "Copying ${modelType.fileName} to cache...")
+                    copyModelFromAssets(appContext, modelType.fileName, cachedModelFile)
                 } else {
-                    try {
-                        addNnapi()
-                        Log.d(TAG, "NNAPI execution provider enabled for ${modelType.fileName}")
-                    } catch (e: Exception) {
-                        Log.w(TAG, "NNAPI not available, using CPU for ${modelType.fileName}")
-                    }
+                    Log.d(TAG, "${modelType.fileName} already cached")
                 }
+
+                val session = createSessionWithFallback(modelType, cachedModelFile)
+
+                if (session != null) {
+                    modelSessions[modelType] = session
+                    Log.d(TAG, "Model ${modelType.fileName} loaded successfully")
+                } else {
+                    Log.e(TAG, "Failed to create session for ${modelType.fileName}")
+                    throw IllegalStateException("Unable to load model ${modelType.fileName}")
+                }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load model ${modelType.fileName}: ${e.message}", e)
+                throw e
+            }
+        }
+    }
+
+    private fun createSessionWithFallback(modelType: ModelType, modelFile: File): OrtSession? {
+        return try {
+            if (modelType == ModelType.OBJECT_REMOVAL) {
+                createLamaSession(modelFile)
+            } else {
+                createStandardSession(modelType, modelFile)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Primary session creation failed for ${modelType.fileName}, trying fallback: ${e.message}", e)
+            try {
+                createConservativeSession(modelFile)
+            } catch (fallbackException: Exception) {
+                Log.e(TAG, "Fallback session creation also failed for ${modelType.fileName}: ${fallbackException.message}", fallbackException)
+                null
+            }
+        }
+    }
+
+    private fun createLamaSession(modelFile: File): OrtSession {
+        Log.d(TAG, "Creating LaMa session with conservative CPU-only settings")
+
+        val sessionOptions = OrtSession.SessionOptions().apply {
+            setIntraOpNumThreads(2)
+            setInterOpNumThreads(1)
+            setOptimizationLevel(OrtSession.SessionOptions.OptLevel.BASIC_OPT)
+            setExecutionMode(OrtSession.SessionOptions.ExecutionMode.SEQUENTIAL)
+
+            try {
+                disableMemPattern()
+                Log.d(TAG, "Memory pattern disabled for LaMa")
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not disable memory pattern: ${e.message}")
             }
 
-            val session = ortEnvironment.createSession(
-                cachedModelFile.absolutePath,
-                sessionOptions
-            )
-
-            modelSessions[modelType] = session
-            Log.d(TAG, "Model ${modelType.fileName} loaded successfully")
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to load model ${modelType.fileName}: ${e.message}", e)
-            throw e
+            try {
+                disableCpuMemArena()
+                Log.d(TAG, "CPU memory arena disabled for LaMa")
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not disable CPU memory arena: ${e.message}")
+            }
         }
+
+        return ortEnvironment.createSession(modelFile.absolutePath, sessionOptions)
+    }
+
+    private fun createStandardSession(modelType: ModelType, modelFile: File): OrtSession {
+        val sessionOptions = OrtSession.SessionOptions().apply {
+            setIntraOpNumThreads(4)
+            setInterOpNumThreads(4)
+            setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+
+            try {
+                addNnapi()
+                Log.d(TAG, "NNAPI execution provider enabled for ${modelType.fileName}")
+            } catch (e: Exception) {
+                Log.w(TAG, "NNAPI not available for ${modelType.fileName}, using CPU")
+            }
+        }
+
+        return ortEnvironment.createSession(modelFile.absolutePath, sessionOptions)
+    }
+
+    private fun createConservativeSession(modelFile: File): OrtSession {
+        Log.d(TAG, "Creating conservative fallback session")
+
+        val sessionOptions = OrtSession.SessionOptions().apply {
+            setIntraOpNumThreads(1)
+            setInterOpNumThreads(1)
+            setOptimizationLevel(OrtSession.SessionOptions.OptLevel.NO_OPT)
+            setExecutionMode(OrtSession.SessionOptions.ExecutionMode.SEQUENTIAL)
+
+            try {
+                disableMemPattern()
+                disableCpuMemArena()
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not apply conservative settings: ${e.message}")
+            }
+        }
+
+        return ortEnvironment.createSession(modelFile.absolutePath, sessionOptions)
     }
 
     private fun copyModelFromAssets(context: Context, fileName: String, destination: File) {
@@ -103,12 +181,18 @@ object AiModelManager {
         }
     }
 
-    fun getSession(modelType: ModelType): OrtSession {
+    suspend fun getSession(modelType: ModelType): OrtSession {
         if (!isInitialized) {
             throw IllegalStateException("AiModelManager not initialized. Call initialize() first.")
         }
+
+        if (!modelSessions.containsKey(modelType)) {
+            Log.d(TAG, "Lazy loading ${modelType.fileName} on first use...")
+            loadModelSequentially(modelType)
+        }
+
         return modelSessions[modelType]
-            ?: throw IllegalStateException("Model ${modelType.fileName} not loaded")
+            ?: throw IllegalStateException("Model ${modelType.fileName} could not be loaded")
     }
 
     fun getEnvironment(): OrtEnvironment {

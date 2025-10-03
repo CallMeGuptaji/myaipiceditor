@@ -4,7 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 
 object ImageUpscaler {
-    fun upscale(context: Context, input: Bitmap): Bitmap {
+    suspend fun upscale(context: Context, input: Bitmap): Bitmap {
         val session = AiModelManager.getSession(AiModelManager.ModelType.IMAGE_UPSCALER)
         val ortEnvironment = AiModelManager.getEnvironment()
 
