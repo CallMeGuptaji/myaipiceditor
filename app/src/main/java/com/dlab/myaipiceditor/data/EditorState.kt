@@ -23,7 +23,9 @@ data class EditorState(
     val textPosition: TextPosition = TextPosition(),
     val density: Float = 2f,
     val isAdjusting: Boolean = false,
-    val adjustmentValues: AdjustmentValues = AdjustmentValues()
+    val adjustmentValues: AdjustmentValues = AdjustmentValues(),
+    val isRemovingObject: Boolean = false,
+    val objectRemovalState: ObjectRemovalState = ObjectRemovalState()
 )
 
 data class TextPosition(
@@ -37,7 +39,15 @@ sealed class EditorAction {
     object StartCrop : EditorAction()
     object CancelCrop : EditorAction()
     data class ConfirmCrop(val cropRect: CropRect) : EditorAction()
-    object RemoveObject : EditorAction()
+    object StartObjectRemoval : EditorAction()
+    object CancelObjectRemoval : EditorAction()
+    data class AddRemovalStroke(val stroke: BrushStroke) : EditorAction()
+    object UndoRemovalStroke : EditorAction()
+    object RedoRemovalStroke : EditorAction()
+    object ResetRemovalStrokes : EditorAction()
+    data class UpdateBrushSize(val size: Float) : EditorAction()
+    object ToggleEraserMode : EditorAction()
+    object ApplyObjectRemoval : EditorAction()
     object RestoreFace : EditorAction()
     object UpscaleImage : EditorAction()
     data class ResizeImage(val width: Int, val height: Int) : EditorAction()

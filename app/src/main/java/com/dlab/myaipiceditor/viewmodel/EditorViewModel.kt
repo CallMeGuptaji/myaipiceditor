@@ -10,8 +10,10 @@ import com.dlab.myaipiceditor.ai.ImageUpscaler
 import com.dlab.myaipiceditor.ai.ObjectRemoval
 import com.dlab.myaipiceditor.data.AdjustmentType
 import com.dlab.myaipiceditor.data.AdjustmentValues
+import com.dlab.myaipiceditor.data.BrushStroke
 import com.dlab.myaipiceditor.data.EditorAction
 import com.dlab.myaipiceditor.data.EditorState
+import com.dlab.myaipiceditor.data.ObjectRemovalState
 import com.dlab.myaipiceditor.data.TextStyle
 import com.dlab.myaipiceditor.data.TextPosition
 import com.dlab.myaipiceditor.ui.CropRect
@@ -31,6 +33,9 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     private val history = mutableListOf<Bitmap>()
     private var historyIndex = -1
 
+    private val removalStrokeHistory = mutableListOf<List<BrushStroke>>()
+    private var removalStrokeIndex = -1
+
     fun handleAction(action: EditorAction) {
         when (action) {
             is EditorAction.LoadImage -> {
@@ -39,11 +44,15 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             is EditorAction.StartCrop -> startCrop()
             is EditorAction.CancelCrop -> cancelCrop()
             is EditorAction.ConfirmCrop -> confirmCrop(action.cropRect)
-            is EditorAction.RemoveObject -> {
-                // For now, we'll implement a simple version
-                // In a full implementation, user would select the object area
-                removeObject()
-            }
+            is EditorAction.StartObjectRemoval -> startObjectRemoval()
+            is EditorAction.CancelObjectRemoval -> cancelObjectRemoval()
+            is EditorAction.AddRemovalStroke -> addRemovalStroke(action.stroke)
+            is EditorAction.UndoRemovalStroke -> undoRemovalStroke()
+            is EditorAction.RedoRemovalStroke -> redoRemovalStroke()
+            is EditorAction.ResetRemovalStrokes -> resetRemovalStrokes()
+            is EditorAction.UpdateBrushSize -> updateBrushSize(action.size)
+            is EditorAction.ToggleEraserMode -> toggleEraserMode()
+            is EditorAction.ApplyObjectRemoval -> applyObjectRemoval()
             is EditorAction.RestoreFace -> restoreFace()
             is EditorAction.UpscaleImage -> upscaleImage()
             is EditorAction.ResizeImage -> resizeImage(action.width, action.height)
@@ -110,19 +119,129 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private fun removeObject() {
+    private fun startObjectRemoval() {
+        _state.value = _state.value.copy(
+            isRemovingObject = true,
+            objectRemovalState = ObjectRemovalState()
+        )
+        removalStrokeHistory.clear()
+        removalStrokeHistory.add(emptyList())
+        removalStrokeIndex = 0
+    }
+
+    private fun cancelObjectRemoval() {
+        _state.value = _state.value.copy(
+            isRemovingObject = false,
+            objectRemovalState = ObjectRemovalState()
+        )
+        removalStrokeHistory.clear()
+        removalStrokeIndex = -1
+    }
+
+    private fun addRemovalStroke(stroke: BrushStroke) {
+        val currentStrokes = _state.value.objectRemovalState.strokes
+        val newStrokes = currentStrokes + stroke
+
+        while (removalStrokeHistory.size > removalStrokeIndex + 1) {
+            removalStrokeHistory.removeAt(removalStrokeHistory.size - 1)
+        }
+
+        removalStrokeHistory.add(newStrokes)
+        removalStrokeIndex = removalStrokeHistory.size - 1
+
+        if (removalStrokeHistory.size > 50) {
+            removalStrokeHistory.removeAt(0)
+            removalStrokeIndex--
+        }
+
+        _state.value = _state.value.copy(
+            objectRemovalState = _state.value.objectRemovalState.copy(
+                strokes = newStrokes,
+                canUndo = removalStrokeIndex > 0,
+                canRedo = removalStrokeIndex < removalStrokeHistory.size - 1
+            )
+        )
+    }
+
+    private fun undoRemovalStroke() {
+        if (removalStrokeIndex > 0) {
+            removalStrokeIndex--
+            val strokes = removalStrokeHistory[removalStrokeIndex]
+            _state.value = _state.value.copy(
+                objectRemovalState = _state.value.objectRemovalState.copy(
+                    strokes = strokes,
+                    canUndo = removalStrokeIndex > 0,
+                    canRedo = removalStrokeIndex < removalStrokeHistory.size - 1
+                )
+            )
+        }
+    }
+
+    private fun redoRemovalStroke() {
+        if (removalStrokeIndex < removalStrokeHistory.size - 1) {
+            removalStrokeIndex++
+            val strokes = removalStrokeHistory[removalStrokeIndex]
+            _state.value = _state.value.copy(
+                objectRemovalState = _state.value.objectRemovalState.copy(
+                    strokes = strokes,
+                    canUndo = removalStrokeIndex > 0,
+                    canRedo = removalStrokeIndex < removalStrokeHistory.size - 1
+                )
+            )
+        }
+    }
+
+    private fun resetRemovalStrokes() {
+        removalStrokeHistory.clear()
+        removalStrokeHistory.add(emptyList())
+        removalStrokeIndex = 0
+
+        _state.value = _state.value.copy(
+            objectRemovalState = _state.value.objectRemovalState.copy(
+                strokes = emptyList(),
+                canUndo = false,
+                canRedo = false
+            )
+        )
+    }
+
+    private fun updateBrushSize(size: Float) {
+        _state.value = _state.value.copy(
+            objectRemovalState = _state.value.objectRemovalState.copy(
+                brushSize = size
+            )
+        )
+    }
+
+    private fun toggleEraserMode() {
+        _state.value = _state.value.copy(
+            objectRemovalState = _state.value.objectRemovalState.copy(
+                isEraserMode = !_state.value.objectRemovalState.isEraserMode
+            )
+        )
+    }
+
+    private fun applyObjectRemoval() {
         val currentImage = _state.value.currentImage ?: return
+        val strokes = _state.value.objectRemovalState.strokes
+
+        if (strokes.isEmpty()) return
 
         viewModelScope.launch {
             _state.value = _state.value.copy(
-                isProcessing = true,
-                processingMessage = "Removing object..."
+                objectRemovalState = _state.value.objectRemovalState.copy(
+                    isProcessing = true
+                )
             )
 
             try {
-                // For demo purposes, we'll create a simple mask
-                // In a real app, user would draw/select the area to remove
-                val mask = createDemoMask(currentImage)
+                val mask = withContext(Dispatchers.Default) {
+                    ObjectRemoval.createMaskFromStrokes(
+                        strokes,
+                        currentImage.width,
+                        currentImage.height
+                    )
+                }
 
                 val result = withContext(Dispatchers.Default) {
                     ObjectRemoval.removeObject(getApplication(), currentImage, mask)
@@ -130,15 +249,18 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
                 _state.value = _state.value.copy(
                     currentImage = result,
-                    isProcessing = false,
-                    processingMessage = ""
+                    isRemovingObject = false,
+                    objectRemovalState = ObjectRemovalState()
                 )
                 addToHistory(result)
+                removalStrokeHistory.clear()
+                removalStrokeIndex = -1
 
             } catch (e: Exception) {
                 _state.value = _state.value.copy(
-                    isProcessing = false,
-                    processingMessage = "",
+                    objectRemovalState = _state.value.objectRemovalState.copy(
+                        isProcessing = false
+                    ),
                     error = "Failed to remove object: ${e.message}"
                 )
             }
@@ -426,20 +548,4 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         _state.value = _state.value.copy(error = null)
     }
 
-    private fun createDemoMask(bitmap: Bitmap): Bitmap {
-        // Create a simple circular mask in the center for demo
-        val mask = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
-        val canvas = android.graphics.Canvas(mask)
-        val paint = android.graphics.Paint().apply {
-            color = android.graphics.Color.WHITE
-            isAntiAlias = true
-        }
-
-        val centerX = bitmap.width / 2f
-        val centerY = bitmap.height / 2f
-        val radius = minOf(bitmap.width, bitmap.height) / 8f
-
-        canvas.drawCircle(centerX, centerY, radius, paint)
-        return mask
-    }
 }

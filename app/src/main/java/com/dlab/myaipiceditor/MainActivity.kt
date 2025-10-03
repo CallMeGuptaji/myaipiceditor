@@ -47,6 +47,7 @@ import com.dlab.myaipiceditor.data.EditorAction
 import com.dlab.myaipiceditor.ui.theme.MyAiPicEditorTheme
 import com.dlab.myaipiceditor.ui.AdjustScreen
 import com.dlab.myaipiceditor.ui.CropScreen
+import com.dlab.myaipiceditor.ui.ObjectRemovalScreen
 import com.dlab.myaipiceditor.ui.TextEditorScreen
 import com.dlab.myaipiceditor.ui.TextStylingScreen
 import com.dlab.myaipiceditor.viewmodel.EditorViewModel
@@ -219,6 +220,38 @@ class MainActivity : ComponentActivity() {
                         canRedo = state.canRedo,
                         onUndo = { viewModel.handleAction(EditorAction.Undo) },
                         onRedo = { viewModel.handleAction(EditorAction.Redo) }
+                    )
+                }
+
+                // Show object removal screen when removing objects
+                if (state.isRemovingObject && state.currentImage != null) {
+                    ObjectRemovalScreen(
+                        bitmap = state.currentImage!!,
+                        removalState = state.objectRemovalState,
+                        onStrokeAdded = { stroke ->
+                            viewModel.handleAction(EditorAction.AddRemovalStroke(stroke))
+                        },
+                        onUndo = {
+                            viewModel.handleAction(EditorAction.UndoRemovalStroke)
+                        },
+                        onRedo = {
+                            viewModel.handleAction(EditorAction.RedoRemovalStroke)
+                        },
+                        onReset = {
+                            viewModel.handleAction(EditorAction.ResetRemovalStrokes)
+                        },
+                        onBrushSizeChange = { size ->
+                            viewModel.handleAction(EditorAction.UpdateBrushSize(size))
+                        },
+                        onToggleEraser = {
+                            viewModel.handleAction(EditorAction.ToggleEraserMode)
+                        },
+                        onApply = {
+                            viewModel.handleAction(EditorAction.ApplyObjectRemoval)
+                        },
+                        onCancel = {
+                            viewModel.handleAction(EditorAction.CancelObjectRemoval)
+                        }
                     )
                 }
 
@@ -457,7 +490,7 @@ fun EditorScreen(
                         "rotate" -> onActionClick(EditorAction.RotateImage(90f))
                         "text" -> onActionClick(EditorAction.StartAddText)
                         "adjust" -> onActionClick(EditorAction.StartAdjust)
-                        "ai_object_removal" -> onActionClick(EditorAction.RemoveObject)
+                        "ai_object_removal" -> onActionClick(EditorAction.StartObjectRemoval)
                         "ai_enhancement" -> onActionClick(EditorAction.RestoreFace)
                         "ai_upscaler" -> onActionClick(EditorAction.UpscaleImage)
                     }
