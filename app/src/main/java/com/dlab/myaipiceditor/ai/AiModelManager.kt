@@ -69,11 +69,15 @@ object AiModelManager {
                 setInterOpNumThreads(4)
                 setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
 
-                try {
-                    addNnapi()
-                    Log.d(TAG, "NNAPI execution provider enabled for ${modelType.fileName}")
-                } catch (e: Exception) {
-                    Log.w(TAG, "NNAPI not available, using CPU for ${modelType.fileName}")
+                if (modelType == ModelType.OBJECT_REMOVAL) {
+                    Log.d(TAG, "Using CPU execution provider for ${modelType.fileName} (NNAPI incompatible)")
+                } else {
+                    try {
+                        addNnapi()
+                        Log.d(TAG, "NNAPI execution provider enabled for ${modelType.fileName}")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "NNAPI not available, using CPU for ${modelType.fileName}")
+                    }
                 }
             }
 
@@ -86,7 +90,7 @@ object AiModelManager {
             Log.d(TAG, "Model ${modelType.fileName} loaded successfully")
 
         } catch (e: Exception) {
-            Log.e(TAG, "Error loading model ${modelType.fileName}", e)
+            Log.e(TAG, "Failed to load model ${modelType.fileName}: ${e.message}", e)
             throw e
         }
     }
