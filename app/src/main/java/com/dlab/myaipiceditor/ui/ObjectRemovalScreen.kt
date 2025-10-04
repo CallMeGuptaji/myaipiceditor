@@ -54,12 +54,19 @@ fun ObjectRemovalScreen(
     var lastStrokeTime by remember { mutableStateOf(0L) }
 
     LaunchedEffect(removalState.strokes.size) {
-        if (removalState.strokes.isNotEmpty() && !removalState.isProcessing && !removalState.isRefiningMask && !removalState.showRefinedPreview) {
+        if (removalState.strokes.isNotEmpty() && !removalState.isProcessing && !removalState.isRefiningMask) {
             lastStrokeTime = System.currentTimeMillis()
-            delay(4000)
-            if (System.currentTimeMillis() - lastStrokeTime >= 4000) {
+            delay(500)
+            if (System.currentTimeMillis() - lastStrokeTime >= 500) {
                 onRefineAndPreview()
             }
+        }
+    }
+
+    LaunchedEffect(removalState.showLivePreview) {
+        if (removalState.showLivePreview) {
+            delay(3000)
+            onAcceptRefinedMask()
         }
     }
 
@@ -151,20 +158,27 @@ fun ObjectRemovalScreen(
                 .padding(paddingValues)
         ) {
             if (removalState.isRefiningMask) {
+                DrawableMaskCanvas(
+                    bitmap = bitmap,
+                    strokes = removalState.strokes,
+                    brushSize = removalState.brushSize,
+                    isEraserMode = false,
+                    showStrokes = removalState.showStrokes,
+                    onStrokeAdded = onStrokeAdded,
+                    modifier = Modifier.fillMaxSize()
+                )
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surface),
+                        .background(Color.Black.copy(alpha = 0.3f)),
                     contentAlignment = Alignment.Center
                 ) {
                     RefiningMaskAnimation()
                 }
-            } else if (removalState.showRefinedPreview && removalState.refinedMaskPreview != null) {
-                RefinedMaskPreview(
+            } else if (removalState.showLivePreview && removalState.livePreviewOverlay != null) {
+                LivePreviewCanvas(
                     bitmap = bitmap,
-                    refinedMask = removalState.refinedMaskPreview,
-                    onAccept = onAcceptRefinedMask,
-                    onReject = onRejectRefinedMask,
+                    overlayMask = removalState.livePreviewOverlay,
                     modifier = Modifier.fillMaxSize()
                 )
             } else if (removalState.isProcessing) {
@@ -247,7 +261,7 @@ fun InstructionOverlay(modifier: Modifier = Modifier) {
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Text(
-                    text = "AI detects object automatically",
+                    text = "AI detects and removes automatically",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                 )
@@ -372,14 +386,16 @@ fun DrawableMaskCanvas(
             }
         }
 
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp)
-                .size(brushSize.dp * 2)
-                .clip(CircleShape)
-                .background(Color(0xFF4CAF50).copy(alpha = 0.5f))
-        )
+        if (showStrokes) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp)
+                    .size(brushSize.dp * 2)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.3f))
+            )
+        }
     }
 }
 
@@ -525,6 +541,111 @@ fun RefiningMaskAnimation(modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+@Composable
+fun LivePreviewCanvas(
+    bitmap: Bitmap,
+    overlayMask: Bitmap,
+    modifier: Modifier = Modifier
+) {
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+
+    val transformableState = rememberTransformableState { zoomChange, offsetChange, _ ->
+        scale = (scale * zoomChange).coerceIn(0.5f, 5f)
+        val maxOffsetX = (canvasSize.width * (scale - 1) / 2f).coerceAtLeast(0f)
+        val maxOffsetY = (canvasSize.height * (scale - 1) / 2f).coerceAtLeast(0f)
+
+        val newOffsetX = (offset.x + offsetChange.x).coerceIn(-maxOffsetX, maxOffsetX)
+        val newOffsetY = (offset.y + offsetChange.y).coerceIn(-maxOffsetY, maxOffsetY)
+        offset = Offset(newOffsetX, newOffsetY)
+    }
+
+    val imageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
+    val maskBitmap = remember(overlayMask) { overlayMask.asImageBitmap() }
+
+    Box(modifier = modifier) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .onGloballyPositioned { coordinates ->
+                    canvasSize = coordinates.size
+                }
+        ) {
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(
+                        scaleX = scale,
+                        scaleY = scale,
+                        translationX = offset.x,
+                        translationY = offset.y
+                    )
+                    .transformable(state = transformableState)
+            ) {
+                val imageRect = getImageRect(size, bitmap)
+
+                drawImage(
+                    image = imageBitmap,
+                    dstOffset = androidx.compose.ui.unit.IntOffset(
+                        imageRect.left.roundToInt(),
+                        imageRect.top.roundToInt()
+                    ),
+                    dstSize = androidx.compose.ui.unit.IntSize(
+                        imageRect.width.roundToInt(),
+                        imageRect.height.roundToInt()
+                    )
+                )
+
+                drawImage(
+                    image = maskBitmap,
+                    dstOffset = androidx.compose.ui.unit.IntOffset(
+                        imageRect.left.roundToInt(),
+                        imageRect.top.roundToInt()
+                    ),
+                    dstSize = androidx.compose.ui.unit.IntSize(
+                        imageRect.width.roundToInt(),
+                        imageRect.height.roundToInt()
+                    ),
+                    alpha = 0.6f,
+                    colorFilter = ColorFilter.tint(Color(0xFF4CAF50), BlendMode.Multiply)
+                )
+            }
+        }
+
+        Card(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f)
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Visibility,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(24.dp)
+                )
+                Text(
+                    text = "Auto-removing in 3 seconds...",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
         }
     }
 }

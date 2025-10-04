@@ -19,5 +19,7 @@ data class ObjectRemovalState(
     val isRefiningMask: Boolean = false,
     val refinedMaskPreview: android.graphics.Bitmap? = null,
     val showRefinedPreview: Boolean = false,
-    val showStrokes: Boolean = true
+    val showStrokes: Boolean = false,
+    val livePreviewOverlay: android.graphics.Bitmap? = null,
+    val showLivePreview: Boolean = false
 )

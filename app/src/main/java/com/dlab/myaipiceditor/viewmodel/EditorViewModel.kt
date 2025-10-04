@@ -267,7 +267,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                     objectRemovalState = _state.value.objectRemovalState.copy(
                         isRefiningMask = false,
                         refinedMaskPreview = refinedMask,
-                        showRefinedPreview = true,
+                        livePreviewOverlay = refinedMask.copy(refinedMask.config, false),
+                        showLivePreview = true,
                         showStrokes = false
                     )
                 )
@@ -276,7 +277,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 _state.value = _state.value.copy(
                     objectRemovalState = _state.value.objectRemovalState.copy(
                         isRefiningMask = false,
-                        showStrokes = true
+                        showStrokes = false
                     ),
                     error = "Failed to refine mask: ${e.message}"
                 )
@@ -289,10 +290,13 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         val refinedMask = _state.value.objectRemovalState.refinedMaskPreview ?: return
 
         viewModelScope.launch {
+            _state.value.objectRemovalState.livePreviewOverlay?.recycle()
+
             _state.value = _state.value.copy(
                 objectRemovalState = _state.value.objectRemovalState.copy(
                     isProcessing = true,
-                    showRefinedPreview = false
+                    showLivePreview = false,
+                    livePreviewOverlay = null
                 )
             )
 
@@ -320,7 +324,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 _state.value = _state.value.copy(
                     objectRemovalState = _state.value.objectRemovalState.copy(
                         isProcessing = false,
-                        showRefinedPreview = false,
+                        showLivePreview = false,
+                        livePreviewOverlay = null,
                         refinedMaskPreview = null
                     ),
                     error = "Failed to remove object: ${e.message}"
@@ -331,11 +336,14 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun rejectRefinedMask() {
         _state.value.objectRemovalState.refinedMaskPreview?.recycle()
+        _state.value.objectRemovalState.livePreviewOverlay?.recycle()
         _state.value = _state.value.copy(
             objectRemovalState = _state.value.objectRemovalState.copy(
                 showRefinedPreview = false,
+                showLivePreview = false,
                 refinedMaskPreview = null,
-                showStrokes = true
+                livePreviewOverlay = null,
+                showStrokes = false
             )
         )
     }
