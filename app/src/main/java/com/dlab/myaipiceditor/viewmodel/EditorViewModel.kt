@@ -46,12 +46,12 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             is EditorAction.ConfirmCrop -> confirmCrop(action.cropRect)
             is EditorAction.StartObjectRemoval -> startObjectRemoval()
             is EditorAction.CancelObjectRemoval -> cancelObjectRemoval()
+            is EditorAction.ConfirmObjectRemoval -> confirmObjectRemoval()
             is EditorAction.AddRemovalStroke -> addRemovalStroke(action.stroke)
             is EditorAction.UndoRemovalStroke -> undoRemovalStroke()
             is EditorAction.RedoRemovalStroke -> redoRemovalStroke()
             is EditorAction.ResetRemovalStrokes -> resetRemovalStrokes()
             is EditorAction.UpdateBrushSize -> updateBrushSize(action.size)
-            is EditorAction.ToggleEraserMode -> toggleEraserMode()
             is EditorAction.ApplyObjectRemoval -> applyObjectRemoval()
             is EditorAction.RestoreFace -> restoreFace()
             is EditorAction.UpscaleImage -> upscaleImage()
@@ -130,6 +130,15 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun cancelObjectRemoval() {
+        _state.value = _state.value.copy(
+            isRemovingObject = false,
+            objectRemovalState = ObjectRemovalState()
+        )
+        removalStrokeHistory.clear()
+        removalStrokeIndex = -1
+    }
+
+    private fun confirmObjectRemoval() {
         _state.value = _state.value.copy(
             isRemovingObject = false,
             objectRemovalState = ObjectRemovalState()
@@ -249,12 +258,17 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
                 _state.value = _state.value.copy(
                     currentImage = result,
-                    isRemovingObject = false,
-                    objectRemovalState = ObjectRemovalState()
+                    objectRemovalState = _state.value.objectRemovalState.copy(
+                        strokes = emptyList(),
+                        isProcessing = false,
+                        canUndo = false,
+                        canRedo = false
+                    )
                 )
                 addToHistory(result)
                 removalStrokeHistory.clear()
-                removalStrokeIndex = -1
+                removalStrokeHistory.add(emptyList())
+                removalStrokeIndex = 0
 
             } catch (e: Exception) {
                 _state.value = _state.value.copy(

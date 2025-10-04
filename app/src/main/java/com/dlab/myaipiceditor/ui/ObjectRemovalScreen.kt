@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.*
@@ -24,13 +23,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.dlab.myaipiceditor.data.BrushStroke
 import com.dlab.myaipiceditor.data.ObjectRemovalState
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,8 +45,21 @@ fun ObjectRemovalScreen(
     onToggleEraser: () -> Unit,
     onApply: () -> Unit,
     onCancel: () -> Unit,
+    onConfirm: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var lastStrokeTime by remember { mutableStateOf(0L) }
+
+    LaunchedEffect(removalState.strokes.size) {
+        if (removalState.strokes.isNotEmpty() && !removalState.isProcessing) {
+            lastStrokeTime = System.currentTimeMillis()
+            delay(4000)
+            if (System.currentTimeMillis() - lastStrokeTime >= 4000) {
+                onApply()
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -105,6 +117,16 @@ fun ObjectRemovalScreen(
                             }
                         )
                     }
+                    IconButton(
+                        onClick = onConfirm,
+                        enabled = !removalState.isProcessing
+                    ) {
+                        Icon(
+                            Icons.Default.Check,
+                            "Done",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -114,9 +136,7 @@ fun ObjectRemovalScreen(
         bottomBar = {
             ObjectRemovalBottomBar(
                 removalState = removalState,
-                onBrushSizeChange = onBrushSizeChange,
-                onToggleEraser = onToggleEraser,
-                onApply = onApply
+                onBrushSizeChange = onBrushSizeChange
             )
         }
     ) { paddingValues ->
@@ -158,7 +178,7 @@ fun ObjectRemovalScreen(
                     bitmap = bitmap,
                     strokes = removalState.strokes,
                     brushSize = removalState.brushSize,
-                    isEraserMode = removalState.isEraserMode,
+                    isEraserMode = false,
                     previewMask = removalState.previewMask,
                     onStrokeAdded = onStrokeAdded,
                     modifier = Modifier.fillMaxSize()
@@ -205,7 +225,7 @@ fun InstructionOverlay(modifier: Modifier = Modifier) {
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Text(
-                    text = "Use two fingers to zoom and pan",
+                    text = "Auto-applies after 4 seconds",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                 )
@@ -292,7 +312,7 @@ fun DrawableMaskCanvas(
                                         BrushStroke(
                                             points = path.toList(),
                                             brushSize = brushSize,
-                                            isEraser = isEraserMode
+                                            isEraser = false
                                         )
                                     )
                                 }
@@ -323,23 +343,21 @@ fun DrawableMaskCanvas(
 
                 currentPath?.let { path ->
                     drawStroke(
-                        BrushStroke(path, brushSize, isEraserMode),
+                        BrushStroke(path, brushSize, false),
                         imageRect
                     )
                 }
             }
         }
 
-        if (!isEraserMode) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp)
-                    .size(brushSize.dp * 2)
-                    .clip(CircleShape)
-                    .background(Color.Red.copy(alpha = 0.5f))
-            )
-        }
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+                .size(brushSize.dp * 2)
+                .clip(CircleShape)
+                .background(Color.Red.copy(alpha = 0.5f))
+        )
     }
 }
 
@@ -364,7 +382,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStroke(
 
     drawPath(
         path = path,
-        color = if (stroke.isEraser) Color.Blue.copy(alpha = 0.3f) else Color.Red.copy(alpha = 0.5f),
+        color = Color.Red.copy(alpha = 0.5f),
         style = Stroke(width = stroke.brushSize * 2)
     )
 }
@@ -392,8 +410,6 @@ private fun getImageRect(
 fun ObjectRemovalBottomBar(
     removalState: ObjectRemovalState,
     onBrushSizeChange: (Float) -> Unit,
-    onToggleEraser: () -> Unit,
-    onApply: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -405,7 +421,7 @@ fun ObjectRemovalBottomBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -434,55 +450,6 @@ fun ObjectRemovalBottomBar(
                     activeTrackColor = MaterialTheme.colorScheme.primary
                 )
             )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedButton(
-                    onClick = onToggleEraser,
-                    enabled = !removalState.isProcessing,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = if (removalState.isEraserMode) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            Color.Transparent
-                        }
-                    )
-                ) {
-                    Icon(
-                        imageVector = if (removalState.isEraserMode) {
-                            Icons.Default.Brush
-                        } else {
-                            Icons.Default.Brush
-                        },
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (removalState.isEraserMode) "Draw Mode" else "Erase Mode"
-                    )
-                }
-
-                Button(
-                    onClick = onApply,
-                    enabled = removalState.strokes.isNotEmpty() && !removalState.isProcessing,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "Apply AI")
-                }
-            }
         }
     }
 }

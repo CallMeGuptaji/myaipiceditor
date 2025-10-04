@@ -251,6 +251,9 @@ class MainActivity : ComponentActivity() {
                         },
                         onCancel = {
                             viewModel.handleAction(EditorAction.CancelObjectRemoval)
+                        },
+                        onConfirm = {
+                            viewModel.handleAction(EditorAction.ConfirmObjectRemoval)
                         }
                     )
                 }
