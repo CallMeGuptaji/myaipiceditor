@@ -47,9 +47,10 @@ object AiModelManager {
             }
 
             loadModelSequentially(ModelType.FACE_RESTORATION)
+            loadModelSequentially(ModelType.FOR_SEGMENTATION)
 
             isInitialized = true
-            Log.d(TAG, "AiModelManager initialized (lazy loading enabled for other models)")
+            Log.d(TAG, "AiModelManager initialized (preloaded: Face Restoration, U2Net Segmentation)")
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing AiModelManager: ${e.message}", e)
             throw e
@@ -94,10 +95,10 @@ object AiModelManager {
 
     private fun createSessionWithFallback(modelType: ModelType, modelFile: File): OrtSession? {
         return try {
-            if (modelType == ModelType.OBJECT_REMOVAL) {
-                createLamaSession(modelFile)
-            } else {
-                createStandardSession(modelType, modelFile)
+            when (modelType) {
+                ModelType.OBJECT_REMOVAL -> createLamaSession(modelFile)
+                ModelType.FOR_SEGMENTATION -> createU2NetSession(modelFile)
+                else -> createStandardSession(modelType, modelFile)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Primary session creation failed for ${modelType.fileName}, trying fallback: ${e.message}", e)
@@ -116,6 +117,19 @@ object AiModelManager {
         val sessionOptions = OrtSession.SessionOptions().apply {
             setIntraOpNumThreads(2)
             setInterOpNumThreads(1)
+            setOptimizationLevel(OrtSession.SessionOptions.OptLevel.BASIC_OPT)
+            setExecutionMode(OrtSession.SessionOptions.ExecutionMode.SEQUENTIAL)
+        }
+
+        return ortEnvironment.createSession(modelFile.absolutePath, sessionOptions)
+    }
+
+    private fun createU2NetSession(modelFile: File): OrtSession {
+        Log.d(TAG, "Creating U2Net session with optimized settings")
+
+        val sessionOptions = OrtSession.SessionOptions().apply {
+            setIntraOpNumThreads(3)
+            setInterOpNumThreads(2)
             setOptimizationLevel(OrtSession.SessionOptions.OptLevel.BASIC_OPT)
             setExecutionMode(OrtSession.SessionOptions.ExecutionMode.SEQUENTIAL)
         }
