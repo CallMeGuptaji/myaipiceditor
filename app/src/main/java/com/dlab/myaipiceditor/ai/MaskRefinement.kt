@@ -38,7 +38,7 @@ object MaskRefinement {
             val segmentationMask = postprocessU2NetOutput(outputTensor, resizedImage.width, resizedImage.height)
 
             inputTensor.close()
-            outputs.forEach { it?.close() }
+            outputs.close()
 
             val mergedMask = mergeMasks(resizedMask, segmentationMask, threshold = 0.5f)
 
