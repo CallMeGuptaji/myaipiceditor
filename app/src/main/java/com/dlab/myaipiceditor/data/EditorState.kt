@@ -69,5 +69,5 @@ sealed class EditorAction {
     object SaveImage : EditorAction()
     object ShareImage : EditorAction()
     object ClearError : EditorAction()
-    object ToggleEraser : EditorAction()
+    object ToggleEraserMode : EditorAction()
 }
