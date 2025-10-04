@@ -243,7 +243,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             _state.value = _state.value.copy(
                 objectRemovalState = _state.value.objectRemovalState.copy(
-                    isRefiningMask = true
+                    isRefiningMask = true,
+                    showStrokes = false
                 )
             )
 
@@ -266,14 +267,16 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                     objectRemovalState = _state.value.objectRemovalState.copy(
                         isRefiningMask = false,
                         refinedMaskPreview = refinedMask,
-                        showRefinedPreview = true
+                        showRefinedPreview = true,
+                        showStrokes = false
                     )
                 )
 
             } catch (e: Exception) {
                 _state.value = _state.value.copy(
                     objectRemovalState = _state.value.objectRemovalState.copy(
-                        isRefiningMask = false
+                        isRefiningMask = false,
+                        showStrokes = true
                     ),
                     error = "Failed to refine mask: ${e.message}"
                 )
@@ -331,7 +334,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         _state.value = _state.value.copy(
             objectRemovalState = _state.value.objectRemovalState.copy(
                 showRefinedPreview = false,
-                refinedMaskPreview = null
+                refinedMaskPreview = null,
+                showStrokes = true
             )
         )
     }

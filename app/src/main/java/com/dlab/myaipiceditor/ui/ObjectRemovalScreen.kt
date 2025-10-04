@@ -201,7 +201,7 @@ fun ObjectRemovalScreen(
                     strokes = removalState.strokes,
                     brushSize = removalState.brushSize,
                     isEraserMode = false,
-                    previewMask = removalState.previewMask,
+                    showStrokes = removalState.showStrokes,
                     onStrokeAdded = onStrokeAdded,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -247,7 +247,7 @@ fun InstructionOverlay(modifier: Modifier = Modifier) {
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Text(
-                    text = "Auto-refines mask after 4 seconds",
+                    text = "AI detects object automatically",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                 )
@@ -262,7 +262,7 @@ fun DrawableMaskCanvas(
     strokes: List<BrushStroke>,
     brushSize: Float,
     isEraserMode: Boolean,
-    previewMask: Boolean,
+    showStrokes: Boolean,
     onStrokeAdded: (BrushStroke) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -358,7 +358,7 @@ fun DrawableMaskCanvas(
                 )
             )
 
-            if (previewMask) {
+            if (showStrokes) {
                 strokes.forEach { stroke ->
                     drawStroke(stroke, imageRect)
                 }
@@ -378,7 +378,7 @@ fun DrawableMaskCanvas(
                 .padding(16.dp)
                 .size(brushSize.dp * 2)
                 .clip(CircleShape)
-                .background(Color.Red.copy(alpha = 0.5f))
+                .background(Color(0xFF4CAF50).copy(alpha = 0.5f))
         )
     }
 }
@@ -404,7 +404,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStroke(
 
     drawPath(
         path = path,
-        color = Color.Red.copy(alpha = 0.5f),
+        color = Color(0xFF4CAF50).copy(alpha = 0.3f),
         style = Stroke(width = stroke.brushSize * 2)
     )
 }
