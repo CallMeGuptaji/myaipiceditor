@@ -38,8 +38,8 @@ object ObjectRemoval {
             val maskTensor = OnnxTensor.createTensor(ortEnvironment, maskBuffer, maskShape)
 
             val inputs = mapOf(
-                "l_image_" to imageTensor,
-                "l_mask_" to maskTensor
+                "image" to imageTensor,
+                "mask" to maskTensor
             )
 
             Log.d(TAG, "Running inference...")
