@@ -44,6 +44,9 @@ fun ObjectRemovalScreen(
     onBrushSizeChange: (Float) -> Unit,
     onToggleEraser: () -> Unit,
     onApply: () -> Unit,
+    onRefineAndPreview: () -> Unit,
+    onAcceptRefinedMask: () -> Unit,
+    onRejectRefinedMask: () -> Unit,
     onCancel: () -> Unit,
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier
@@ -51,11 +54,11 @@ fun ObjectRemovalScreen(
     var lastStrokeTime by remember { mutableStateOf(0L) }
 
     LaunchedEffect(removalState.strokes.size) {
-        if (removalState.strokes.isNotEmpty() && !removalState.isProcessing) {
+        if (removalState.strokes.isNotEmpty() && !removalState.isProcessing && !removalState.isRefiningMask && !removalState.showRefinedPreview) {
             lastStrokeTime = System.currentTimeMillis()
             delay(4000)
             if (System.currentTimeMillis() - lastStrokeTime >= 4000) {
-                onApply()
+                onRefineAndPreview()
             }
         }
     }
@@ -134,10 +137,12 @@ fun ObjectRemovalScreen(
             )
         },
         bottomBar = {
-            ObjectRemovalBottomBar(
-                removalState = removalState,
-                onBrushSizeChange = onBrushSizeChange
-            )
+            if (!removalState.showRefinedPreview) {
+                ObjectRemovalBottomBar(
+                    removalState = removalState,
+                    onBrushSizeChange = onBrushSizeChange
+                )
+            }
         }
     ) { paddingValues ->
         Box(
@@ -145,7 +150,24 @@ fun ObjectRemovalScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            if (removalState.isProcessing) {
+            if (removalState.isRefiningMask) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    RefiningMaskAnimation()
+                }
+            } else if (removalState.showRefinedPreview && removalState.refinedMaskPreview != null) {
+                RefinedMaskPreview(
+                    bitmap = bitmap,
+                    refinedMask = removalState.refinedMaskPreview,
+                    onAccept = onAcceptRefinedMask,
+                    onReject = onRejectRefinedMask,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else if (removalState.isProcessing) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -225,7 +247,7 @@ fun InstructionOverlay(modifier: Modifier = Modifier) {
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Text(
-                    text = "Auto-applies after 4 seconds",
+                    text = "Auto-refines mask after 4 seconds",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                 )
@@ -450,6 +472,227 @@ fun ObjectRemovalBottomBar(
                     activeTrackColor = MaterialTheme.colorScheme.primary
                 )
             )
+        }
+    }
+}
+
+@Composable
+fun RefiningMaskAnimation(modifier: Modifier = Modifier) {
+    var animationProgress by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            animationProgress = (animationProgress + 0.02f) % 1f
+            delay(16)
+        }
+    }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(24.dp),
+        modifier = modifier
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(120.dp)
+        ) {
+            CircularProgressIndicator(
+                progress = animationProgress,
+                modifier = Modifier.size(80.dp),
+                color = MaterialTheme.colorScheme.primary,
+                strokeWidth = 6.dp
+            )
+            Icon(
+                imageVector = Icons.Default.AutoFixHigh,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(40.dp)
+            )
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "Refining mask...",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "AI is analyzing the region",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun RefinedMaskPreview(
+    bitmap: Bitmap,
+    refinedMask: Bitmap,
+    onAccept: () -> Unit,
+    onReject: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+
+    val transformableState = rememberTransformableState { zoomChange, offsetChange, _ ->
+        scale = (scale * zoomChange).coerceIn(0.5f, 5f)
+        val maxOffsetX = (canvasSize.width * (scale - 1) / 2f).coerceAtLeast(0f)
+        val maxOffsetY = (canvasSize.height * (scale - 1) / 2f).coerceAtLeast(0f)
+
+        val newOffsetX = (offset.x + offsetChange.x).coerceIn(-maxOffsetX, maxOffsetX)
+        val newOffsetY = (offset.y + offsetChange.y).coerceIn(-maxOffsetY, maxOffsetY)
+        offset = Offset(newOffsetX, newOffsetY)
+    }
+
+    val imageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
+    val maskBitmap = remember(refinedMask) { refinedMask.asImageBitmap() }
+
+    Box(modifier = modifier) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .onGloballyPositioned { coordinates ->
+                    canvasSize = coordinates.size
+                }
+        ) {
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(
+                        scaleX = scale,
+                        scaleY = scale,
+                        translationX = offset.x,
+                        translationY = offset.y
+                    )
+                    .transformable(state = transformableState)
+            ) {
+                val imageRect = getImageRect(size, bitmap)
+
+                drawImage(
+                    image = imageBitmap,
+                    dstOffset = androidx.compose.ui.unit.IntOffset(
+                        imageRect.left.roundToInt(),
+                        imageRect.top.roundToInt()
+                    ),
+                    dstSize = androidx.compose.ui.unit.IntSize(
+                        imageRect.width.roundToInt(),
+                        imageRect.height.roundToInt()
+                    )
+                )
+
+                drawImage(
+                    image = maskBitmap,
+                    dstOffset = androidx.compose.ui.unit.IntOffset(
+                        imageRect.left.roundToInt(),
+                        imageRect.top.roundToInt()
+                    ),
+                    dstSize = androidx.compose.ui.unit.IntSize(
+                        imageRect.width.roundToInt(),
+                        imageRect.height.roundToInt()
+                    ),
+                    alpha = 0.5f,
+                    colorFilter = ColorFilter.tint(Color.Red, BlendMode.Multiply)
+                )
+            }
+        }
+
+        Card(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f)
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text(
+                        text = "Mask Refined Successfully",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+                Text(
+                    text = "Review the refined mask and apply",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Button(
+                onClick = onReject,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Redo",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            Button(
+                onClick = onAccept,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Apply",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
     }
 }

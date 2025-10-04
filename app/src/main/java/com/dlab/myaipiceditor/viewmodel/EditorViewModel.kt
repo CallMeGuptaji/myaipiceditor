@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dlab.myaipiceditor.ai.FaceRestoration
 import com.dlab.myaipiceditor.ai.ImageUpscaler
+import com.dlab.myaipiceditor.ai.MaskRefinement
 import com.dlab.myaipiceditor.ai.ObjectRemoval
 import com.dlab.myaipiceditor.data.AdjustmentType
 import com.dlab.myaipiceditor.data.AdjustmentValues
@@ -53,6 +54,9 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             is EditorAction.ResetRemovalStrokes -> resetRemovalStrokes()
             is EditorAction.UpdateBrushSize -> updateBrushSize(action.size)
             is EditorAction.ApplyObjectRemoval -> applyObjectRemoval()
+            is EditorAction.RefineAndPreviewMask -> refineAndPreviewMask()
+            is EditorAction.AcceptRefinedMask -> acceptRefinedMask()
+            is EditorAction.RejectRefinedMask -> rejectRefinedMask()
             is EditorAction.RestoreFace -> restoreFace()
             is EditorAction.UpscaleImage -> upscaleImage()
             is EditorAction.ResizeImage -> resizeImage(action.width, action.height)
@@ -226,6 +230,108 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         _state.value = _state.value.copy(
             objectRemovalState = _state.value.objectRemovalState.copy(
                 isEraserMode = !_state.value.objectRemovalState.isEraserMode
+            )
+        )
+    }
+
+    private fun refineAndPreviewMask() {
+        val currentImage = _state.value.currentImage ?: return
+        val strokes = _state.value.objectRemovalState.strokes
+
+        if (strokes.isEmpty()) return
+
+        viewModelScope.launch {
+            _state.value = _state.value.copy(
+                objectRemovalState = _state.value.objectRemovalState.copy(
+                    isRefiningMask = true
+                )
+            )
+
+            try {
+                val roughMask = withContext(Dispatchers.Default) {
+                    MaskRefinement.createMaskFromStrokes(
+                        currentImage.width,
+                        currentImage.height,
+                        strokes
+                    )
+                }
+
+                val refinedMask = withContext(Dispatchers.Default) {
+                    MaskRefinement.refineMask(currentImage, roughMask)
+                }
+
+                roughMask.recycle()
+
+                _state.value = _state.value.copy(
+                    objectRemovalState = _state.value.objectRemovalState.copy(
+                        isRefiningMask = false,
+                        refinedMaskPreview = refinedMask,
+                        showRefinedPreview = true
+                    )
+                )
+
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(
+                    objectRemovalState = _state.value.objectRemovalState.copy(
+                        isRefiningMask = false
+                    ),
+                    error = "Failed to refine mask: ${e.message}"
+                )
+            }
+        }
+    }
+
+    private fun acceptRefinedMask() {
+        val currentImage = _state.value.currentImage ?: return
+        val refinedMask = _state.value.objectRemovalState.refinedMaskPreview ?: return
+
+        viewModelScope.launch {
+            _state.value = _state.value.copy(
+                objectRemovalState = _state.value.objectRemovalState.copy(
+                    isProcessing = true,
+                    showRefinedPreview = false
+                )
+            )
+
+            try {
+                val result = withContext(Dispatchers.Default) {
+                    ObjectRemoval.removeObject(getApplication(), currentImage, refinedMask)
+                }
+
+                _state.value = _state.value.copy(
+                    currentImage = result,
+                    objectRemovalState = _state.value.objectRemovalState.copy(
+                        strokes = emptyList(),
+                        isProcessing = false,
+                        refinedMaskPreview = null,
+                        canUndo = false,
+                        canRedo = false
+                    )
+                )
+                addToHistory(result)
+                removalStrokeHistory.clear()
+                removalStrokeHistory.add(emptyList())
+                removalStrokeIndex = 0
+
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(
+                    objectRemovalState = _state.value.objectRemovalState.copy(
+                        isProcessing = false,
+                        showRefinedPreview = false,
+                        refinedMaskPreview = null
+                    ),
+                    error = "Failed to remove object: ${e.message}"
+                )
+            }
+        }
+    }
+
+    private fun rejectRefinedMask() {
+        _state.value.objectRemovalState.refinedMaskPreview?.recycle()
+        _state.value = _state.value.copy(
+            objectRemovalState = _state.value.objectRemovalState.copy(
+                showRefinedPreview = false,
+                refinedMaskPreview = null
             )
         )
     }

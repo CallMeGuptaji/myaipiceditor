@@ -254,6 +254,15 @@ class MainActivity : ComponentActivity() {
                         onApply = {
                             viewModel.handleAction(EditorAction.ApplyObjectRemoval)
                         },
+                        onRefineAndPreview = {
+                            viewModel.handleAction(EditorAction.RefineAndPreviewMask)
+                        },
+                        onAcceptRefinedMask = {
+                            viewModel.handleAction(EditorAction.AcceptRefinedMask)
+                        },
+                        onRejectRefinedMask = {
+                            viewModel.handleAction(EditorAction.RejectRefinedMask)
+                        },
                         onCancel = {
                             viewModel.handleAction(EditorAction.CancelObjectRemoval)
                         },

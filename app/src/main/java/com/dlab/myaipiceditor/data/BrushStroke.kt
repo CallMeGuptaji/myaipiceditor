@@ -15,5 +15,8 @@ data class ObjectRemovalState(
     val canUndo: Boolean = false,
     val canRedo: Boolean = false,
     val isProcessing: Boolean = false,
-    val previewMask: Boolean = true
+    val previewMask: Boolean = true,
+    val isRefiningMask: Boolean = false,
+    val refinedMaskPreview: android.graphics.Bitmap? = null,
+    val showRefinedPreview: Boolean = false
 )
