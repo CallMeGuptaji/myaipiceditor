@@ -51,18 +51,6 @@ fun ObjectRemovalScreen(
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var lastStrokeTime by remember { mutableStateOf(0L) }
-
-    LaunchedEffect(removalState.strokes.size) {
-        if (removalState.strokes.isNotEmpty() && !removalState.isProcessing && !removalState.isRefiningMask) {
-            lastStrokeTime = System.currentTimeMillis()
-            delay(500)
-            if (System.currentTimeMillis() - lastStrokeTime >= 500) {
-                onRefineAndPreview()
-            }
-        }
-    }
-
     LaunchedEffect(removalState.showLivePreview) {
         if (removalState.showLivePreview) {
             delay(3000)

@@ -9,6 +9,7 @@ import com.dlab.myaipiceditor.ai.FaceRestoration
 import com.dlab.myaipiceditor.ai.ImageUpscaler
 import com.dlab.myaipiceditor.ai.MaskRefinement
 import com.dlab.myaipiceditor.ai.ObjectRemoval
+import com.dlab.myaipiceditor.ai.SmartMaskSnap
 import com.dlab.myaipiceditor.data.AdjustmentType
 import com.dlab.myaipiceditor.data.AdjustmentValues
 import com.dlab.myaipiceditor.data.BrushStroke
@@ -174,6 +175,59 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 canRedo = removalStrokeIndex < removalStrokeHistory.size - 1
             )
         )
+
+        triggerSmartMaskSnap()
+    }
+
+    private fun triggerSmartMaskSnap() {
+        val currentImage = _state.value.currentImage ?: return
+        val strokes = _state.value.objectRemovalState.strokes
+
+        if (strokes.isEmpty()) return
+
+        viewModelScope.launch {
+            _state.value = _state.value.copy(
+                objectRemovalState = _state.value.objectRemovalState.copy(
+                    isRefiningMask = true,
+                    showStrokes = false
+                )
+            )
+
+            try {
+                val roughMask = withContext(Dispatchers.Default) {
+                    MaskRefinement.createMaskFromStrokes(
+                        currentImage.width,
+                        currentImage.height,
+                        strokes
+                    )
+                }
+
+                val refinedMask = withContext(Dispatchers.Default) {
+                    SmartMaskSnap.snapToObject(getApplication(), currentImage, roughMask)
+                }
+
+                roughMask.recycle()
+
+                _state.value = _state.value.copy(
+                    objectRemovalState = _state.value.objectRemovalState.copy(
+                        isRefiningMask = false,
+                        refinedMaskPreview = refinedMask,
+                        livePreviewOverlay = refinedMask.copy(refinedMask.config ?: Bitmap.Config.ARGB_8888, false),
+                        showLivePreview = true,
+                        showStrokes = false
+                    )
+                )
+
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(
+                    objectRemovalState = _state.value.objectRemovalState.copy(
+                        isRefiningMask = false,
+                        showStrokes = true
+                    ),
+                    error = "Failed to refine mask: ${e.message}"
+                )
+            }
+        }
     }
 
     private fun undoRemovalStroke() {
@@ -235,54 +289,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun refineAndPreviewMask() {
-        val currentImage = _state.value.currentImage ?: return
-        val strokes = _state.value.objectRemovalState.strokes
-
-        if (strokes.isEmpty()) return
-
-        viewModelScope.launch {
-            _state.value = _state.value.copy(
-                objectRemovalState = _state.value.objectRemovalState.copy(
-                    isRefiningMask = true,
-                    showStrokes = false
-                )
-            )
-
-            try {
-                val roughMask = withContext(Dispatchers.Default) {
-                    MaskRefinement.createMaskFromStrokes(
-                        currentImage.width,
-                        currentImage.height,
-                        strokes
-                    )
-                }
-
-                val refinedMask = withContext(Dispatchers.Default) {
-                    MaskRefinement.refineMask(currentImage, roughMask)
-                }
-
-                roughMask.recycle()
-
-                _state.value = _state.value.copy(
-                    objectRemovalState = _state.value.objectRemovalState.copy(
-                        isRefiningMask = false,
-                        refinedMaskPreview = refinedMask,
-                        livePreviewOverlay = refinedMask.copy(refinedMask.config ?: Bitmap.Config.ARGB_8888, false),
-                        showLivePreview = true,
-                        showStrokes = false
-                    )
-                )
-
-            } catch (e: Exception) {
-                _state.value = _state.value.copy(
-                    objectRemovalState = _state.value.objectRemovalState.copy(
-                        isRefiningMask = false,
-                        showStrokes = false
-                    ),
-                    error = "Failed to refine mask: ${e.message}"
-                )
-            }
-        }
+        triggerSmartMaskSnap()
     }
 
     private fun acceptRefinedMask() {
@@ -301,7 +308,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             )
 
             try {
-                val result = withContext(Dispatchers.Default) {
+                val result = withContext(Dispatchers.IO) {
                     ObjectRemoval.removeObject(getApplication(), currentImage, refinedMask)
                 }
 
