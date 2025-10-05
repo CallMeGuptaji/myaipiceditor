@@ -267,7 +267,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                     objectRemovalState = _state.value.objectRemovalState.copy(
                         isRefiningMask = false,
                         refinedMaskPreview = refinedMask,
-                        livePreviewOverlay = refinedMask.copy(refinedMask.config, false),
+                        livePreviewOverlay = refinedMask.copy(refinedMask.config ?: Bitmap.Config.ARGB_8888, false),
                         showLivePreview = true,
                         showStrokes = false
                     )
