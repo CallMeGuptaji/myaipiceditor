@@ -14,6 +14,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import android.provider.MediaStore
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -52,6 +53,8 @@ import com.dlab.myaipiceditor.ui.theme.MyAiPicEditorTheme
 import com.dlab.myaipiceditor.ui.AdjustScreen
 import com.dlab.myaipiceditor.ui.CropScreen
 import com.dlab.myaipiceditor.ui.ObjectRemovalScreen
+import com.dlab.myaipiceditor.ui.SaveConfig
+import com.dlab.myaipiceditor.ui.SaveScreen
 import com.dlab.myaipiceditor.ui.TextEditorScreen
 import com.dlab.myaipiceditor.ui.TextStylingScreen
 import com.dlab.myaipiceditor.viewmodel.EditorViewModel
@@ -114,6 +117,18 @@ class MainActivity : ComponentActivity() {
                     permissions.launchMultiplePermissionRequest()
                 }
 
+                BackHandler(enabled = state.currentImage != null) {
+                    when {
+                        state.showingSaveDialog -> viewModel.handleAction(EditorAction.HideSaveDialog)
+                        state.isCropping -> viewModel.handleAction(EditorAction.CancelCrop)
+                        state.isAddingText -> viewModel.handleAction(EditorAction.CancelAddText)
+                        state.isStylingText -> viewModel.handleAction(EditorAction.CancelTextStyling)
+                        state.isAdjusting -> viewModel.handleAction(EditorAction.CancelAdjust)
+                        state.isRemovingObject -> viewModel.handleAction(EditorAction.CancelObjectRemoval)
+                        else -> viewModel.handleAction(EditorAction.BackToStart)
+                    }
+                }
+
                 // Show first screen if no image is loaded, otherwise show editor
                 if (state.currentImage == null) {
                     FirstScreen(
@@ -152,7 +167,6 @@ class MainActivity : ComponentActivity() {
                                 permissions.launchMultiplePermissionRequest()
                             }
                         },
-                        onSaveImage = { saveImageToGallery(state.currentImage!!) },
                         onShareImage = { shareImage(state.currentImage!!) }
                     )
                 }
@@ -225,6 +239,20 @@ class MainActivity : ComponentActivity() {
                         canRedo = state.canRedo,
                         onUndo = { viewModel.handleAction(EditorAction.Undo) },
                         onRedo = { viewModel.handleAction(EditorAction.Redo) }
+                    )
+                }
+
+                // Show save screen when saving
+                if (state.showingSaveDialog && state.currentImage != null) {
+                    SaveScreen(
+                        bitmap = state.currentImage,
+                        onSaveClick = { config ->
+                            saveImageToGallery(state.currentImage!!, config)
+                            viewModel.handleAction(EditorAction.HideSaveDialog)
+                        },
+                        onBackClick = {
+                            viewModel.handleAction(EditorAction.HideSaveDialog)
+                        }
                     )
                 }
 
@@ -353,22 +381,27 @@ class MainActivity : ComponentActivity() {
         return FileProvider.getUriForFile(this, "${packageName}.fileprovider", imageFile)
     }
 
-    private fun saveImageToGallery(bitmap: Bitmap) {
+    private fun saveImageToGallery(bitmap: Bitmap, config: SaveConfig) {
         try {
             val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-            val fileName = "AI_EDIT_${timeStamp}.jpg"
+            val fileName = "AI_EDIT_${timeStamp}.${config.format.extension}"
+
+            val mimeType = when (config.format.extension) {
+                "png" -> "image/png"
+                else -> "image/jpeg"
+            }
 
             val resolver = contentResolver
             val contentValues = android.content.ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
                 put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/AI Photo Editor")
             }
 
             val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
             uri?.let {
                 resolver.openOutputStream(it)?.use { outputStream ->
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 95, outputStream)
+                    bitmap.compress(config.format.compressFormat, config.quality, outputStream)
                 }
             }
         } catch (e: Exception) {
@@ -504,7 +537,6 @@ fun EditorScreen(
     onActionClick: (EditorAction) -> Unit,
     onSelectFromGallery: () -> Unit,
     onTakePhoto: () -> Unit,
-    onSaveImage: () -> Unit,
     onShareImage: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -513,10 +545,10 @@ fun EditorScreen(
             EditorTopBar(
                 canUndo = state.canUndo && !state.isProcessing,
                 canRedo = state.canRedo && !state.isProcessing,
-                onBackClick = { /* TODO: Navigate back to first screen */ },
+                onBackClick = { onActionClick(EditorAction.BackToStart) },
                 onUndoClick = { onActionClick(EditorAction.Undo) },
                 onRedoClick = { onActionClick(EditorAction.Redo) },
-                onSaveClick = onSaveImage
+                onSaveClick = { onActionClick(EditorAction.ShowSaveDialog) }
             )
         },
         bottomBar = {

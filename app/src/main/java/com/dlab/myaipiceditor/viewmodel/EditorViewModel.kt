@@ -79,6 +79,9 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             is EditorAction.SaveImage -> saveImage()
             is EditorAction.ShareImage -> shareImage()
             is EditorAction.ClearError -> clearError()
+            is EditorAction.BackToStart -> backToStart()
+            is EditorAction.ShowSaveDialog -> showSaveDialog()
+            is EditorAction.HideSaveDialog -> hideSaveDialog()
             else -> {}
         }
     }
@@ -705,6 +708,22 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun clearError() {
         _state.value = _state.value.copy(error = null)
+    }
+
+    private fun backToStart() {
+        _state.value = EditorState()
+        history.clear()
+        historyIndex = -1
+        removalStrokeHistory.clear()
+        removalStrokeIndex = -1
+    }
+
+    private fun showSaveDialog() {
+        _state.value = _state.value.copy(showingSaveDialog = true)
+    }
+
+    private fun hideSaveDialog() {
+        _state.value = _state.value.copy(showingSaveDialog = false)
     }
 
 }

@@ -25,7 +25,8 @@ data class EditorState(
     val isAdjusting: Boolean = false,
     val adjustmentValues: AdjustmentValues = AdjustmentValues(),
     val isRemovingObject: Boolean = false,
-    val objectRemovalState: ObjectRemovalState = ObjectRemovalState()
+    val objectRemovalState: ObjectRemovalState = ObjectRemovalState(),
+    val showingSaveDialog: Boolean = false
 )
 
 data class TextPosition(
@@ -73,4 +74,7 @@ sealed class EditorAction {
     object ShareImage : EditorAction()
     object ClearError : EditorAction()
     object ToggleEraserMode : EditorAction()
+    object BackToStart : EditorAction()
+    object ShowSaveDialog : EditorAction()
+    object HideSaveDialog : EditorAction()
 }
