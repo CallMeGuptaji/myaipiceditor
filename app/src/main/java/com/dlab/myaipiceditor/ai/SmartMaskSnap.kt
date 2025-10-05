@@ -22,7 +22,7 @@ object SmartMaskSnap {
         val shape = longArrayOf(1, 3, MODEL_INPUT_SIZE.toLong(), MODEL_INPUT_SIZE.toLong())
         val inputTensor = OnnxTensor.createTensor(env, inputBuffer, shape)
 
-        val outputs = session.run(mapOf("input" to inputTensor))
+        val outputs = session.run(mapOf("input.1" to inputTensor))
         val output = outputs[0].value as Array<Array<Array<FloatArray>>>
 
         val segmentationMask = postprocess(output, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE)

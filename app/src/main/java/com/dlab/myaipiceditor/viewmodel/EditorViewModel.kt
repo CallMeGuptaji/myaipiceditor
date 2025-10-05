@@ -127,7 +127,9 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     private fun startObjectRemoval() {
         _state.value = _state.value.copy(
             isRemovingObject = true,
-            objectRemovalState = ObjectRemovalState()
+            objectRemovalState = ObjectRemovalState(
+                showStrokes = true
+            )
         )
         removalStrokeHistory.clear()
         removalStrokeHistory.add(emptyList())
@@ -189,7 +191,9 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             _state.value = _state.value.copy(
                 objectRemovalState = _state.value.objectRemovalState.copy(
                     isRefiningMask = true,
-                    showStrokes = false
+                    showStrokes = true,
+                    showLivePreview = false,
+                    livePreviewOverlay = null
                 )
             )
 
@@ -208,6 +212,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
                 roughMask.recycle()
 
+                _state.value.objectRemovalState.livePreviewOverlay?.recycle()
+
                 _state.value = _state.value.copy(
                     objectRemovalState = _state.value.objectRemovalState.copy(
                         isRefiningMask = false,
@@ -222,7 +228,9 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 _state.value = _state.value.copy(
                     objectRemovalState = _state.value.objectRemovalState.copy(
                         isRefiningMask = false,
-                        showStrokes = true
+                        showStrokes = true,
+                        showLivePreview = false,
+                        livePreviewOverlay = null
                     ),
                     error = "Failed to refine mask: ${e.message}"
                 )
@@ -238,7 +246,11 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 objectRemovalState = _state.value.objectRemovalState.copy(
                     strokes = strokes,
                     canUndo = removalStrokeIndex > 0,
-                    canRedo = removalStrokeIndex < removalStrokeHistory.size - 1
+                    canRedo = removalStrokeIndex < removalStrokeHistory.size - 1,
+                    showStrokes = true,
+                    showLivePreview = false,
+                    livePreviewOverlay = null,
+                    refinedMaskPreview = null
                 )
             )
         }
@@ -252,7 +264,11 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 objectRemovalState = _state.value.objectRemovalState.copy(
                     strokes = strokes,
                     canUndo = removalStrokeIndex > 0,
-                    canRedo = removalStrokeIndex < removalStrokeHistory.size - 1
+                    canRedo = removalStrokeIndex < removalStrokeHistory.size - 1,
+                    showStrokes = true,
+                    showLivePreview = false,
+                    livePreviewOverlay = null,
+                    refinedMaskPreview = null
                 )
             )
         }
@@ -267,7 +283,11 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             objectRemovalState = _state.value.objectRemovalState.copy(
                 strokes = emptyList(),
                 canUndo = false,
-                canRedo = false
+                canRedo = false,
+                showStrokes = true,
+                showLivePreview = false,
+                livePreviewOverlay = null,
+                refinedMaskPreview = null
             )
         )
     }
