@@ -157,31 +157,7 @@ fun ObjectRemovalScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            if (removalState.isRefiningMask) {
-                DrawableMaskCanvas(
-                    bitmap = bitmap,
-                    strokes = removalState.strokes,
-                    brushSize = removalState.brushSize,
-                    isEraserMode = false,
-                    showStrokes = removalState.showStrokes,
-                    onStrokeAdded = onStrokeAdded,
-                    modifier = Modifier.fillMaxSize()
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.3f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    RefiningMaskAnimation()
-                }
-            } else if (removalState.showLivePreview && removalState.livePreviewOverlay != null) {
-                LivePreviewCanvas(
-                    bitmap = bitmap,
-                    overlayMask = removalState.livePreviewOverlay,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else if (removalState.isProcessing) {
+            if (removalState.isProcessing) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -217,6 +193,8 @@ fun ObjectRemovalScreen(
                     isEraserMode = false,
                     showStrokes = removalState.showStrokes,
                     onStrokeAdded = onStrokeAdded,
+                    overlayMask = removalState.livePreviewOverlay,
+                    isRefining = removalState.isRefiningMask,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -227,6 +205,69 @@ fun ObjectRemovalScreen(
                         .align(Alignment.TopCenter)
                         .padding(16.dp)
                 )
+            }
+
+            if (removalState.isRefiningMask) {
+                Card(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f)
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            text = "Detecting object...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+            }
+
+            if (removalState.showLivePreview && removalState.livePreviewOverlay != null) {
+                Card(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f)
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = "Removing in 3 seconds...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
             }
         }
     }
@@ -278,6 +319,8 @@ fun DrawableMaskCanvas(
     isEraserMode: Boolean,
     showStrokes: Boolean,
     onStrokeAdded: (BrushStroke) -> Unit,
+    overlayMask: Bitmap? = null,
+    isRefining: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     var scale by remember { mutableFloatStateOf(1f) }
@@ -296,6 +339,7 @@ fun DrawableMaskCanvas(
     }
 
     val imageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
+    val maskBitmap = remember(overlayMask) { overlayMask?.asImageBitmap() }
 
     Box(
         modifier = modifier
@@ -315,7 +359,8 @@ fun DrawableMaskCanvas(
                     translationY = offset.y
                 )
                 .transformable(state = transformableState)
-                .pointerInput(brushSize, isEraserMode) {
+                .pointerInput(brushSize, isEraserMode, isRefining) {
+                    if (isRefining) return@pointerInput
                     detectDragGestures(
                         onDragStart = { tapOffset ->
                             val canvasSize = androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat())
@@ -372,6 +417,22 @@ fun DrawableMaskCanvas(
                 )
             )
 
+            if (overlayMask != null && maskBitmap != null) {
+                drawImage(
+                    image = maskBitmap,
+                    dstOffset = androidx.compose.ui.unit.IntOffset(
+                        imageRect.left.roundToInt(),
+                        imageRect.top.roundToInt()
+                    ),
+                    dstSize = androidx.compose.ui.unit.IntSize(
+                        imageRect.width.roundToInt(),
+                        imageRect.height.roundToInt()
+                    ),
+                    alpha = 0.5f,
+                    colorFilter = ColorFilter.tint(Color(0xFFFF5722), BlendMode.Modulate)
+                )
+            }
+
             if (showStrokes) {
                 strokes.forEach { stroke ->
                     drawStroke(stroke, imageRect)
@@ -386,14 +447,14 @@ fun DrawableMaskCanvas(
             }
         }
 
-        if (showStrokes) {
+        if (!isRefining && overlayMask == null) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(16.dp)
                     .size(brushSize.dp * 2)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.3f))
+                    .background(Color.White.copy(alpha = 0.4f))
             )
         }
     }
@@ -541,279 +602,6 @@ fun RefiningMaskAnimation(modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        }
-    }
-}
-
-@Composable
-fun LivePreviewCanvas(
-    bitmap: Bitmap,
-    overlayMask: Bitmap,
-    modifier: Modifier = Modifier
-) {
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
-    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
-
-    val transformableState = rememberTransformableState { zoomChange, offsetChange, _ ->
-        scale = (scale * zoomChange).coerceIn(0.5f, 5f)
-        val maxOffsetX = (canvasSize.width * (scale - 1) / 2f).coerceAtLeast(0f)
-        val maxOffsetY = (canvasSize.height * (scale - 1) / 2f).coerceAtLeast(0f)
-
-        val newOffsetX = (offset.x + offsetChange.x).coerceIn(-maxOffsetX, maxOffsetX)
-        val newOffsetY = (offset.y + offsetChange.y).coerceIn(-maxOffsetY, maxOffsetY)
-        offset = Offset(newOffsetX, newOffsetY)
-    }
-
-    val imageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
-    val maskBitmap = remember(overlayMask) { overlayMask.asImageBitmap() }
-
-    Box(modifier = modifier) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .onGloballyPositioned { coordinates ->
-                    canvasSize = coordinates.size
-                }
-        ) {
-            Canvas(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer(
-                        scaleX = scale,
-                        scaleY = scale,
-                        translationX = offset.x,
-                        translationY = offset.y
-                    )
-                    .transformable(state = transformableState)
-            ) {
-                val imageRect = getImageRect(size, bitmap)
-
-                drawImage(
-                    image = imageBitmap,
-                    dstOffset = androidx.compose.ui.unit.IntOffset(
-                        imageRect.left.roundToInt(),
-                        imageRect.top.roundToInt()
-                    ),
-                    dstSize = androidx.compose.ui.unit.IntSize(
-                        imageRect.width.roundToInt(),
-                        imageRect.height.roundToInt()
-                    )
-                )
-
-                drawImage(
-                    image = maskBitmap,
-                    dstOffset = androidx.compose.ui.unit.IntOffset(
-                        imageRect.left.roundToInt(),
-                        imageRect.top.roundToInt()
-                    ),
-                    dstSize = androidx.compose.ui.unit.IntSize(
-                        imageRect.width.roundToInt(),
-                        imageRect.height.roundToInt()
-                    ),
-                    alpha = 0.6f,
-                    colorFilter = ColorFilter.tint(Color(0xFF4CAF50), BlendMode.Multiply)
-                )
-            }
-        }
-
-        Card(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f)
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Visibility,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(24.dp)
-                )
-                Text(
-                    text = "Auto-removing in 3 seconds...",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun RefinedMaskPreview(
-    bitmap: Bitmap,
-    refinedMask: Bitmap,
-    onAccept: () -> Unit,
-    onReject: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
-    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
-
-    val transformableState = rememberTransformableState { zoomChange, offsetChange, _ ->
-        scale = (scale * zoomChange).coerceIn(0.5f, 5f)
-        val maxOffsetX = (canvasSize.width * (scale - 1) / 2f).coerceAtLeast(0f)
-        val maxOffsetY = (canvasSize.height * (scale - 1) / 2f).coerceAtLeast(0f)
-
-        val newOffsetX = (offset.x + offsetChange.x).coerceIn(-maxOffsetX, maxOffsetX)
-        val newOffsetY = (offset.y + offsetChange.y).coerceIn(-maxOffsetY, maxOffsetY)
-        offset = Offset(newOffsetX, newOffsetY)
-    }
-
-    val imageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
-    val maskBitmap = remember(refinedMask) { refinedMask.asImageBitmap() }
-
-    Box(modifier = modifier) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .onGloballyPositioned { coordinates ->
-                    canvasSize = coordinates.size
-                }
-        ) {
-            Canvas(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer(
-                        scaleX = scale,
-                        scaleY = scale,
-                        translationX = offset.x,
-                        translationY = offset.y
-                    )
-                    .transformable(state = transformableState)
-            ) {
-                val imageRect = getImageRect(size, bitmap)
-
-                drawImage(
-                    image = imageBitmap,
-                    dstOffset = androidx.compose.ui.unit.IntOffset(
-                        imageRect.left.roundToInt(),
-                        imageRect.top.roundToInt()
-                    ),
-                    dstSize = androidx.compose.ui.unit.IntSize(
-                        imageRect.width.roundToInt(),
-                        imageRect.height.roundToInt()
-                    )
-                )
-
-                drawImage(
-                    image = maskBitmap,
-                    dstOffset = androidx.compose.ui.unit.IntOffset(
-                        imageRect.left.roundToInt(),
-                        imageRect.top.roundToInt()
-                    ),
-                    dstSize = androidx.compose.ui.unit.IntSize(
-                        imageRect.width.roundToInt(),
-                        imageRect.height.roundToInt()
-                    ),
-                    alpha = 0.5f,
-                    colorFilter = ColorFilter.tint(Color.Red, BlendMode.Multiply)
-                )
-            }
-        }
-
-        Card(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f)
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Text(
-                        text = "Mask Refined Successfully",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-                Text(
-                    text = "Review the refined mask and apply",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                )
-            }
-        }
-
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Button(
-                onClick = onReject,
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Redo",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
-            Button(
-                onClick = onAccept,
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Apply",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
         }
     }
 }
