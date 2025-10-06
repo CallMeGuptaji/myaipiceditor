@@ -332,12 +332,6 @@ fun DrawableMaskCanvas(
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer(
-                    scaleX = scale,
-                    scaleY = scale,
-                    translationX = offset.x,
-                    translationY = offset.y
-                )
                 .pointerInput(brushSize, isEraserMode, isRefining, scale, offset) {
                     if (isRefining) return@pointerInput
 
@@ -358,12 +352,9 @@ fun DrawableMaskCanvas(
                                                 val canvasSize = androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat())
                                                 val imageRect = getImageRect(canvasSize, bitmap)
 
-                                                val transformedX = (change.position.x - offset.x) / scale
-                                                val transformedY = (change.position.y - offset.y) / scale
-
                                                 val normalizedOffset = Offset(
-                                                    (transformedX - imageRect.left) / imageRect.width,
-                                                    (transformedY - imageRect.top) / imageRect.height
+                                                    (change.position.x - imageRect.left) / imageRect.width,
+                                                    (change.position.y - imageRect.top) / imageRect.height
                                                 )
 
                                                 if (normalizedOffset.x in 0f..1f && normalizedOffset.y in 0f..1f) {
@@ -374,12 +365,9 @@ fun DrawableMaskCanvas(
                                                 val canvasSize = androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat())
                                                 val imageRect = getImageRect(canvasSize, bitmap)
 
-                                                val transformedX = (change.position.x - offset.x) / scale
-                                                val transformedY = (change.position.y - offset.y) / scale
-
                                                 val normalizedOffset = Offset(
-                                                    (transformedX - imageRect.left) / imageRect.width,
-                                                    (transformedY - imageRect.top) / imageRect.height
+                                                    (change.position.x - imageRect.left) / imageRect.width,
+                                                    (change.position.y - imageRect.top) / imageRect.height
                                                 )
 
                                                 if (normalizedOffset.x in 0f..1f && normalizedOffset.y in 0f..1f) {
@@ -448,6 +436,12 @@ fun DrawableMaskCanvas(
                         }
                     }
                 }
+                .graphicsLayer(
+                    scaleX = scale,
+                    scaleY = scale,
+                    translationX = offset.x,
+                    translationY = offset.y
+                )
         ) {
             val imageRect = getImageRect(size, bitmap)
 
