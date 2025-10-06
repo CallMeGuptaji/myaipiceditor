@@ -349,12 +349,27 @@ fun DrawableMaskCanvas(
                                                 change.consume()
                                             } else if (!isDrawing) {
                                                 isDrawing = true
+
                                                 val canvasSize = androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat())
                                                 val imageRect = getImageRect(canvasSize, bitmap)
 
+                                                // Transform touch coordinates to canvas space
+                                                // The graphicsLayer applies scale from center and then translation
+                                                val centerX = size.width / 2f
+                                                val centerY = size.height / 2f
+
+                                                // Reverse the transformations:
+                                                // 1. Remove translation
+                                                val untranslatedX = change.position.x - offset.x
+                                                val untranslatedY = change.position.y - offset.y
+
+                                                // 2. Remove scale (scale is from center)
+                                                val unscaledX = centerX + (untranslatedX - centerX) / scale
+                                                val unscaledY = centerY + (untranslatedY - centerY) / scale
+
                                                 val normalizedOffset = Offset(
-                                                    (change.position.x - imageRect.left) / imageRect.width,
-                                                    (change.position.y - imageRect.top) / imageRect.height
+                                                    (unscaledX - imageRect.left) / imageRect.width,
+                                                    (unscaledY - imageRect.top) / imageRect.height
                                                 )
 
                                                 if (normalizedOffset.x in 0f..1f && normalizedOffset.y in 0f..1f) {
@@ -365,9 +380,22 @@ fun DrawableMaskCanvas(
                                                 val canvasSize = androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat())
                                                 val imageRect = getImageRect(canvasSize, bitmap)
 
+                                                // Transform touch coordinates to canvas space
+                                                val centerX = size.width / 2f
+                                                val centerY = size.height / 2f
+
+                                                // Reverse the transformations:
+                                                // 1. Remove translation
+                                                val untranslatedX = change.position.x - offset.x
+                                                val untranslatedY = change.position.y - offset.y
+
+                                                // 2. Remove scale (scale is from center)
+                                                val unscaledX = centerX + (untranslatedX - centerX) / scale
+                                                val unscaledY = centerY + (untranslatedY - centerY) / scale
+
                                                 val normalizedOffset = Offset(
-                                                    (change.position.x - imageRect.left) / imageRect.width,
-                                                    (change.position.y - imageRect.top) / imageRect.height
+                                                    (unscaledX - imageRect.left) / imageRect.width,
+                                                    (unscaledY - imageRect.top) / imageRect.height
                                                 )
 
                                                 if (normalizedOffset.x in 0f..1f && normalizedOffset.y in 0f..1f) {
@@ -416,17 +444,26 @@ fun DrawableMaskCanvas(
                                         val zoomChange = newDistance / oldDistance
                                         scale = (scale * zoomChange).coerceIn(0.5f, 5f)
 
-                                        val maxOffsetX = (canvasSize.width * (scale - 1) / 2f).coerceAtLeast(0f)
-                                        val maxOffsetY = (canvasSize.height * (scale - 1) / 2f).coerceAtLeast(0f)
-
+                                        // Pan gesture
                                         val panX = (firstChange.position.x - firstChange.previousPosition.x +
-                                                   secondChange.position.x - secondChange.previousPosition.x) / 2
+                                                secondChange.position.x - secondChange.previousPosition.x) / 2
                                         val panY = (firstChange.position.y - firstChange.previousPosition.y +
-                                                   secondChange.position.y - secondChange.previousPosition.y) / 2
+                                                secondChange.position.y - secondChange.previousPosition.y) / 2
 
-                                        val newOffsetX = (offset.x + panX).coerceIn(-maxOffsetX, maxOffsetX)
-                                        val newOffsetY = (offset.y + panY).coerceIn(-maxOffsetY, maxOffsetY)
-                                        offset = Offset(newOffsetX, newOffsetY)
+                                        // Update offset with pan
+                                        offset = Offset(
+                                            offset.x + panX,
+                                            offset.y + panY
+                                        )
+
+                                        // Constrain offset to prevent excessive panning
+                                        val maxOffsetX = (size.width * (scale - 1) / 2f).coerceAtLeast(0f)
+                                        val maxOffsetY = (size.height * (scale - 1) / 2f).coerceAtLeast(0f)
+
+                                        offset = Offset(
+                                            offset.x.coerceIn(-maxOffsetX, maxOffsetX),
+                                            offset.y.coerceIn(-maxOffsetY, maxOffsetY)
+                                        )
                                     }
 
                                     firstChange.consume()
