@@ -337,7 +337,7 @@ fun DrawableMaskCanvas(
                     translationX = offset.x,
                     translationY = offset.y
                 )
-                .pointerInput(brushSize, isEraserMode, isRefining) {
+                .pointerInput(brushSize, isEraserMode, isRefining, scale, offset) {
                     if (isRefining) return@pointerInput
 
                     awaitPointerEventScope {
@@ -354,24 +354,32 @@ fun DrawableMaskCanvas(
                                                 isDrawing = true
                                                 val canvasSize = androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat())
                                                 val imageRect = getImageRect(canvasSize, bitmap)
-                                                val adjustedOffset = Offset(
-                                                    ((change.position.x / scale) - (offset.x / scale) - imageRect.left) / imageRect.width,
-                                                    ((change.position.y / scale) - (offset.y / scale) - imageRect.top) / imageRect.height
+
+                                                val transformedX = (change.position.x - offset.x) / scale
+                                                val transformedY = (change.position.y - offset.y) / scale
+
+                                                val normalizedOffset = Offset(
+                                                    (transformedX - imageRect.left) / imageRect.width,
+                                                    (transformedY - imageRect.top) / imageRect.height
                                                 )
 
-                                                if (adjustedOffset.x in 0f..1f && adjustedOffset.y in 0f..1f) {
-                                                    currentPath = mutableListOf(adjustedOffset)
+                                                if (normalizedOffset.x in 0f..1f && normalizedOffset.y in 0f..1f) {
+                                                    currentPath = mutableListOf(normalizedOffset)
                                                 }
                                             } else {
                                                 val canvasSize = androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat())
                                                 val imageRect = getImageRect(canvasSize, bitmap)
-                                                val adjustedOffset = Offset(
-                                                    ((change.position.x / scale) - (offset.x / scale) - imageRect.left) / imageRect.width,
-                                                    ((change.position.y / scale) - (offset.y / scale) - imageRect.top) / imageRect.height
+
+                                                val transformedX = (change.position.x - offset.x) / scale
+                                                val transformedY = (change.position.y - offset.y) / scale
+
+                                                val normalizedOffset = Offset(
+                                                    (transformedX - imageRect.left) / imageRect.width,
+                                                    (transformedY - imageRect.top) / imageRect.height
                                                 )
 
-                                                if (adjustedOffset.x in 0f..1f && adjustedOffset.y in 0f..1f) {
-                                                    currentPath?.add(adjustedOffset)
+                                                if (normalizedOffset.x in 0f..1f && normalizedOffset.y in 0f..1f) {
+                                                    currentPath?.add(normalizedOffset)
                                                 }
                                             }
                                             change.consume()
