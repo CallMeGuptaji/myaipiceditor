@@ -353,23 +353,18 @@ fun DrawableMaskCanvas(
                                                 val canvasSize = androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat())
                                                 val imageRect = getImageRect(canvasSize, bitmap)
 
-                                                // Transform touch coordinates to canvas space
-                                                // The graphicsLayer applies scale from center and then translation
-                                                val centerX = size.width / 2f
-                                                val centerY = size.height / 2f
-
-                                                // Reverse the transformations:
-                                                // 1. Remove translation
-                                                val untranslatedX = change.position.x - offset.x
-                                                val untranslatedY = change.position.y - offset.y
-
-                                                // 2. Remove scale (scale is from center)
-                                                val unscaledX = centerX + (untranslatedX - centerX) / scale
-                                                val unscaledY = centerY + (untranslatedY - centerY) / scale
+                                                val canvasPos = transformTouchToCanvas(
+                                                    change.position.x,
+                                                    change.position.y,
+                                                    size.width.toFloat(),
+                                                    size.height.toFloat(),
+                                                    scale,
+                                                    offset
+                                                )
 
                                                 val normalizedOffset = Offset(
-                                                    (unscaledX - imageRect.left) / imageRect.width,
-                                                    (unscaledY - imageRect.top) / imageRect.height
+                                                    (canvasPos.x - imageRect.left) / imageRect.width,
+                                                    (canvasPos.y - imageRect.top) / imageRect.height
                                                 )
 
                                                 if (normalizedOffset.x in 0f..1f && normalizedOffset.y in 0f..1f) {
@@ -380,22 +375,18 @@ fun DrawableMaskCanvas(
                                                 val canvasSize = androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat())
                                                 val imageRect = getImageRect(canvasSize, bitmap)
 
-                                                // Transform touch coordinates to canvas space
-                                                val centerX = size.width / 2f
-                                                val centerY = size.height / 2f
-
-                                                // Reverse the transformations:
-                                                // 1. Remove translation
-                                                val untranslatedX = change.position.x - offset.x
-                                                val untranslatedY = change.position.y - offset.y
-
-                                                // 2. Remove scale (scale is from center)
-                                                val unscaledX = centerX + (untranslatedX - centerX) / scale
-                                                val unscaledY = centerY + (untranslatedY - centerY) / scale
+                                                val canvasPos = transformTouchToCanvas(
+                                                    change.position.x,
+                                                    change.position.y,
+                                                    size.width.toFloat(),
+                                                    size.height.toFloat(),
+                                                    scale,
+                                                    offset
+                                                )
 
                                                 val normalizedOffset = Offset(
-                                                    (unscaledX - imageRect.left) / imageRect.width,
-                                                    (unscaledY - imageRect.top) / imageRect.height
+                                                    (canvasPos.x - imageRect.left) / imageRect.width,
+                                                    (canvasPos.y - imageRect.top) / imageRect.height
                                                 )
 
                                                 if (normalizedOffset.x in 0f..1f && normalizedOffset.y in 0f..1f) {
@@ -580,6 +571,26 @@ private fun getImageRect(
     val top = (canvasSize.height - height) / 2
 
     return androidx.compose.ui.geometry.Rect(left, top, left + width, top + height)
+}
+
+private fun transformTouchToCanvas(
+    touchX: Float,
+    touchY: Float,
+    canvasWidth: Float,
+    canvasHeight: Float,
+    scale: Float,
+    offset: Offset
+): Offset {
+    val centerX = canvasWidth / 2f
+    val centerY = canvasHeight / 2f
+
+    val untranslatedX = touchX - offset.x
+    val untranslatedY = touchY - offset.y
+
+    val unscaledX = centerX + (untranslatedX - centerX) / scale
+    val unscaledY = centerY + (untranslatedY - centerY) / scale
+
+    return Offset(unscaledX, unscaledY)
 }
 
 @Composable
