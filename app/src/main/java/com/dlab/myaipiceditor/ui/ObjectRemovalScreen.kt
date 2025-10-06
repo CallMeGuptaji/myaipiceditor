@@ -315,16 +315,7 @@ fun DrawableMaskCanvas(
     var offset by remember { mutableStateOf(Offset.Zero) }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var currentPath by remember { mutableStateOf<MutableList<Offset>?>(null) }
-
-    val transformableState = rememberTransformableState { zoomChange, offsetChange, _ ->
-        scale = (scale * zoomChange).coerceIn(0.5f, 5f)
-        val maxOffsetX = (canvasSize.width * (scale - 1) / 2f).coerceAtLeast(0f)
-        val maxOffsetY = (canvasSize.height * (scale - 1) / 2f).coerceAtLeast(0f)
-
-        val newOffsetX = (offset.x + offsetChange.x).coerceIn(-maxOffsetX, maxOffsetX)
-        val newOffsetY = (offset.y + offsetChange.y).coerceIn(-maxOffsetY, maxOffsetY)
-        offset = Offset(newOffsetX, newOffsetY)
-    }
+    var isDrawing by remember { mutableStateOf(false) }
 
     val imageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
     val maskBitmap = remember(overlayMask) { overlayMask?.asImageBitmap() }
@@ -346,49 +337,98 @@ fun DrawableMaskCanvas(
                     translationX = offset.x,
                     translationY = offset.y
                 )
-                .transformable(state = transformableState)
                 .pointerInput(brushSize, isEraserMode, isRefining) {
                     if (isRefining) return@pointerInput
-                    detectDragGestures(
-                        onDragStart = { tapOffset ->
-                            val canvasSize = androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat())
-                            val imageRect = getImageRect(canvasSize, bitmap)
-                            val adjustedOffset = Offset(
-                                (tapOffset.x - imageRect.left) / imageRect.width,
-                                (tapOffset.y - imageRect.top) / imageRect.height
-                            )
 
-                            if (adjustedOffset.x in 0f..1f && adjustedOffset.y in 0f..1f) {
-                                currentPath = mutableListOf(adjustedOffset)
-                            }
-                        },
-                        onDrag = { change, _ ->
-                            val canvasSize = androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat())
-                            val imageRect = getImageRect(canvasSize, bitmap)
-                            val adjustedOffset = Offset(
-                                (change.position.x - imageRect.left) / imageRect.width,
-                                (change.position.y - imageRect.top) / imageRect.height
-                            )
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
 
-                            if (adjustedOffset.x in 0f..1f && adjustedOffset.y in 0f..1f) {
-                                currentPath?.add(adjustedOffset)
-                            }
-                        },
-                        onDragEnd = {
-                            currentPath?.let { path ->
-                                if (path.size > 1) {
-                                    onStrokeAdded(
-                                        BrushStroke(
-                                            points = path.toList(),
-                                            brushSize = brushSize,
-                                            isEraser = false
-                                        )
-                                    )
+                            when (event.changes.size) {
+                                1 -> {
+                                    val change = event.changes.first()
+
+                                    when (change.pressed) {
+                                        true -> {
+                                            if (!isDrawing) {
+                                                isDrawing = true
+                                                val canvasSize = androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat())
+                                                val imageRect = getImageRect(canvasSize, bitmap)
+                                                val adjustedOffset = Offset(
+                                                    ((change.position.x / scale) - (offset.x / scale) - imageRect.left) / imageRect.width,
+                                                    ((change.position.y / scale) - (offset.y / scale) - imageRect.top) / imageRect.height
+                                                )
+
+                                                if (adjustedOffset.x in 0f..1f && adjustedOffset.y in 0f..1f) {
+                                                    currentPath = mutableListOf(adjustedOffset)
+                                                }
+                                            } else {
+                                                val canvasSize = androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat())
+                                                val imageRect = getImageRect(canvasSize, bitmap)
+                                                val adjustedOffset = Offset(
+                                                    ((change.position.x / scale) - (offset.x / scale) - imageRect.left) / imageRect.width,
+                                                    ((change.position.y / scale) - (offset.y / scale) - imageRect.top) / imageRect.height
+                                                )
+
+                                                if (adjustedOffset.x in 0f..1f && adjustedOffset.y in 0f..1f) {
+                                                    currentPath?.add(adjustedOffset)
+                                                }
+                                            }
+                                            change.consume()
+                                        }
+                                        false -> {
+                                            if (isDrawing) {
+                                                isDrawing = false
+                                                currentPath?.let { path ->
+                                                    if (path.size > 1) {
+                                                        onStrokeAdded(
+                                                            BrushStroke(
+                                                                points = path.toList(),
+                                                                brushSize = brushSize,
+                                                                isEraser = false
+                                                            )
+                                                        )
+                                                    }
+                                                }
+                                                currentPath = null
+                                            }
+                                            change.consume()
+                                        }
+                                    }
+                                }
+                                2 -> {
+                                    isDrawing = false
+                                    currentPath = null
+
+                                    val firstChange = event.changes[0]
+                                    val secondChange = event.changes[1]
+
+                                    val oldDistance = (firstChange.previousPosition - secondChange.previousPosition).getDistance()
+                                    val newDistance = (firstChange.position - secondChange.position).getDistance()
+
+                                    if (oldDistance > 0) {
+                                        val zoomChange = newDistance / oldDistance
+                                        scale = (scale * zoomChange).coerceIn(0.5f, 5f)
+
+                                        val maxOffsetX = (canvasSize.width * (scale - 1) / 2f).coerceAtLeast(0f)
+                                        val maxOffsetY = (canvasSize.height * (scale - 1) / 2f).coerceAtLeast(0f)
+
+                                        val panX = (firstChange.position.x - firstChange.previousPosition.x +
+                                                   secondChange.position.x - secondChange.previousPosition.x) / 2
+                                        val panY = (firstChange.position.y - firstChange.previousPosition.y +
+                                                   secondChange.position.y - secondChange.previousPosition.y) / 2
+
+                                        val newOffsetX = (offset.x + panX).coerceIn(-maxOffsetX, maxOffsetX)
+                                        val newOffsetY = (offset.y + panY).coerceIn(-maxOffsetY, maxOffsetY)
+                                        offset = Offset(newOffsetX, newOffsetY)
+                                    }
+
+                                    firstChange.consume()
+                                    secondChange.consume()
                                 }
                             }
-                            currentPath = null
                         }
-                    )
+                    }
                 }
         ) {
             val imageRect = getImageRect(size, bitmap)

@@ -201,6 +201,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             )
 
             try {
+                AiModelManager.initialize(getApplication())
+
                 val roughMask = withContext(Dispatchers.Default) {
                     MaskRefinement.createMaskFromStrokes(
                         currentImage.width,
@@ -245,15 +247,20 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         if (removalStrokeIndex > 0) {
             removalStrokeIndex--
             val strokes = removalStrokeHistory[removalStrokeIndex]
+
+            _state.value.objectRemovalState.livePreviewOverlay?.recycle()
+            _state.value.objectRemovalState.refinedMaskPreview?.recycle()
+
             _state.value = _state.value.copy(
                 objectRemovalState = _state.value.objectRemovalState.copy(
                     strokes = strokes,
                     canUndo = removalStrokeIndex > 0,
                     canRedo = removalStrokeIndex < removalStrokeHistory.size - 1,
-                    showStrokes = true,
+                    showStrokes = false,
                     showLivePreview = false,
                     livePreviewOverlay = null,
-                    refinedMaskPreview = null
+                    refinedMaskPreview = null,
+                    isRefiningMask = false
                 )
             )
         }
@@ -263,15 +270,20 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         if (removalStrokeIndex < removalStrokeHistory.size - 1) {
             removalStrokeIndex++
             val strokes = removalStrokeHistory[removalStrokeIndex]
+
+            _state.value.objectRemovalState.livePreviewOverlay?.recycle()
+            _state.value.objectRemovalState.refinedMaskPreview?.recycle()
+
             _state.value = _state.value.copy(
                 objectRemovalState = _state.value.objectRemovalState.copy(
                     strokes = strokes,
                     canUndo = removalStrokeIndex > 0,
                     canRedo = removalStrokeIndex < removalStrokeHistory.size - 1,
-                    showStrokes = true,
+                    showStrokes = false,
                     showLivePreview = false,
                     livePreviewOverlay = null,
-                    refinedMaskPreview = null
+                    refinedMaskPreview = null,
+                    isRefiningMask = false
                 )
             )
         }
