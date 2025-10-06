@@ -179,7 +179,7 @@ fun ObjectRemovalScreen(
                     strokes = removalState.strokes,
                     brushSize = removalState.brushSize,
                     isEraserMode = false,
-                    showStrokes = removalState.showStrokes,
+                    showStrokes = true,
                     onStrokeAdded = onStrokeAdded,
                     overlayMask = removalState.livePreviewOverlay,
                     isRefining = removalState.isRefiningMask,
