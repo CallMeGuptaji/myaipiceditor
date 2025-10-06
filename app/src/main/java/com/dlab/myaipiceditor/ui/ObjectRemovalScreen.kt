@@ -316,6 +316,7 @@ fun DrawableMaskCanvas(
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var currentPath by remember { mutableStateOf<MutableList<Offset>?>(null) }
     var isDrawing by remember { mutableStateOf(false) }
+    var wasMultiTouch by remember { mutableStateOf(false) }
 
     val imageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
     val maskBitmap = remember(overlayMask) { overlayMask?.asImageBitmap() }
@@ -350,7 +351,9 @@ fun DrawableMaskCanvas(
 
                                     when (change.pressed) {
                                         true -> {
-                                            if (!isDrawing) {
+                                            if (wasMultiTouch) {
+                                                change.consume()
+                                            } else if (!isDrawing) {
                                                 isDrawing = true
                                                 val canvasSize = androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat())
                                                 val imageRect = getImageRect(canvasSize, bitmap)
@@ -366,6 +369,7 @@ fun DrawableMaskCanvas(
                                                 if (normalizedOffset.x in 0f..1f && normalizedOffset.y in 0f..1f) {
                                                     currentPath = mutableListOf(normalizedOffset)
                                                 }
+                                                change.consume()
                                             } else {
                                                 val canvasSize = androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat())
                                                 val imageRect = getImageRect(canvasSize, bitmap)
@@ -381,11 +385,14 @@ fun DrawableMaskCanvas(
                                                 if (normalizedOffset.x in 0f..1f && normalizedOffset.y in 0f..1f) {
                                                     currentPath?.add(normalizedOffset)
                                                 }
+                                                change.consume()
                                             }
-                                            change.consume()
                                         }
                                         false -> {
-                                            if (isDrawing) {
+                                            if (wasMultiTouch) {
+                                                wasMultiTouch = false
+                                                change.consume()
+                                            } else if (isDrawing) {
                                                 isDrawing = false
                                                 currentPath?.let { path ->
                                                     if (path.size > 1) {
@@ -399,12 +406,15 @@ fun DrawableMaskCanvas(
                                                     }
                                                 }
                                                 currentPath = null
+                                                change.consume()
+                                            } else {
+                                                change.consume()
                                             }
-                                            change.consume()
                                         }
                                     }
                                 }
                                 2 -> {
+                                    wasMultiTouch = true
                                     isDrawing = false
                                     currentPath = null
 
