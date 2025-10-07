@@ -173,11 +173,16 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             removalStrokeIndex--
         }
 
+        val canUndo = removalStrokeIndex > 0
+        val canRedo = removalStrokeIndex < removalStrokeHistory.size - 1
+
+        android.util.Log.d("ObjectRemoval", "addStroke: index=$removalStrokeIndex, historySize=${removalStrokeHistory.size}, canUndo=$canUndo, canRedo=$canRedo")
+
         _state.value = _state.value.copy(
             objectRemovalState = _state.value.objectRemovalState.copy(
                 strokes = newStrokes,
-                canUndo = removalStrokeIndex > 0,
-                canRedo = removalStrokeIndex < removalStrokeHistory.size - 1
+                canUndo = canUndo,
+                canRedo = canRedo
             )
         )
 
@@ -244,6 +249,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun undoRemovalStroke() {
+        android.util.Log.d("ObjectRemoval", "undoRemovalStroke called: index=$removalStrokeIndex, historySize=${removalStrokeHistory.size}")
         if (removalStrokeIndex > 0) {
             removalStrokeIndex--
             val strokes = removalStrokeHistory[removalStrokeIndex]
@@ -251,12 +257,17 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             _state.value.objectRemovalState.livePreviewOverlay?.recycle()
             _state.value.objectRemovalState.refinedMaskPreview?.recycle()
 
+            val canUndo = removalStrokeIndex > 0
+            val canRedo = removalStrokeIndex < removalStrokeHistory.size - 1
+
+            android.util.Log.d("ObjectRemoval", "undo: newIndex=$removalStrokeIndex, canUndo=$canUndo, canRedo=$canRedo, strokes=${strokes.size}")
+
             _state.value = _state.value.copy(
                 objectRemovalState = _state.value.objectRemovalState.copy(
                     strokes = strokes,
-                    canUndo = removalStrokeIndex > 0,
-                    canRedo = removalStrokeIndex < removalStrokeHistory.size - 1,
-                    showStrokes = false,
+                    canUndo = canUndo,
+                    canRedo = canRedo,
+                    showStrokes = true,
                     showLivePreview = false,
                     livePreviewOverlay = null,
                     refinedMaskPreview = null,
@@ -267,6 +278,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun redoRemovalStroke() {
+        android.util.Log.d("ObjectRemoval", "redoRemovalStroke called: index=$removalStrokeIndex, historySize=${removalStrokeHistory.size}")
         if (removalStrokeIndex < removalStrokeHistory.size - 1) {
             removalStrokeIndex++
             val strokes = removalStrokeHistory[removalStrokeIndex]
@@ -274,12 +286,17 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             _state.value.objectRemovalState.livePreviewOverlay?.recycle()
             _state.value.objectRemovalState.refinedMaskPreview?.recycle()
 
+            val canUndo = removalStrokeIndex > 0
+            val canRedo = removalStrokeIndex < removalStrokeHistory.size - 1
+
+            android.util.Log.d("ObjectRemoval", "redo: newIndex=$removalStrokeIndex, canUndo=$canUndo, canRedo=$canRedo, strokes=${strokes.size}")
+
             _state.value = _state.value.copy(
                 objectRemovalState = _state.value.objectRemovalState.copy(
                     strokes = strokes,
-                    canUndo = removalStrokeIndex > 0,
-                    canRedo = removalStrokeIndex < removalStrokeHistory.size - 1,
-                    showStrokes = false,
+                    canUndo = canUndo,
+                    canRedo = canRedo,
+                    showStrokes = true,
                     showLivePreview = false,
                     livePreviewOverlay = null,
                     refinedMaskPreview = null,
@@ -290,9 +307,13 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun resetRemovalStrokes() {
+        android.util.Log.d("ObjectRemoval", "resetRemovalStrokes called")
         removalStrokeHistory.clear()
         removalStrokeHistory.add(emptyList())
         removalStrokeIndex = 0
+
+        _state.value.objectRemovalState.livePreviewOverlay?.recycle()
+        _state.value.objectRemovalState.refinedMaskPreview?.recycle()
 
         _state.value = _state.value.copy(
             objectRemovalState = _state.value.objectRemovalState.copy(
@@ -302,7 +323,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 showStrokes = true,
                 showLivePreview = false,
                 livePreviewOverlay = null,
-                refinedMaskPreview = null
+                refinedMaskPreview = null,
+                isRefiningMask = false
             )
         )
     }
