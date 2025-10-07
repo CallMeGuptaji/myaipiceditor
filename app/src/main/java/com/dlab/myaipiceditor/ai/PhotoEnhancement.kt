@@ -39,7 +39,7 @@ object PhotoEnhancement {
             onProgress(0.4f)
 
             Log.d(TAG, "Running ESRGAN inference...")
-            val outputs = session.run(mapOf("input" to inputTensor))
+            val outputs = session.run(mapOf("image" to inputTensor))
             onProgress(0.7f)
 
             val outputTensor = outputs[0].value as Array<Array<Array<FloatArray>>>
