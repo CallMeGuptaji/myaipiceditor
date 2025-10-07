@@ -23,7 +23,7 @@ class AiPhotoEnhancementViewModel(application: Application) : AndroidViewModel(a
 
     fun setOriginalImage(bitmap: Bitmap) {
         originalBitmapCopy?.recycle()
-        originalBitmapCopy = bitmap.copy(bitmap.config, false)
+        originalBitmapCopy = bitmap.copy(Bitmap.Config.ARGB_8888, false)
 
         _state.value = _state.value.copy(
             originalBitmap = originalBitmapCopy,
