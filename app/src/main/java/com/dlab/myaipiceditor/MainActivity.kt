@@ -51,6 +51,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dlab.myaipiceditor.data.EditorAction
 import com.dlab.myaipiceditor.ui.theme.MyAiPicEditorTheme
 import com.dlab.myaipiceditor.ui.AdjustScreen
+import com.dlab.myaipiceditor.ui.AiPhotoEnhancementScreen
 import com.dlab.myaipiceditor.ui.CropScreen
 import com.dlab.myaipiceditor.ui.ObjectRemovalScreen
 import com.dlab.myaipiceditor.ui.SaveConfig
@@ -125,6 +126,7 @@ class MainActivity : ComponentActivity() {
                         state.isStylingText -> viewModel.handleAction(EditorAction.CancelTextStyling)
                         state.isAdjusting -> viewModel.handleAction(EditorAction.CancelAdjust)
                         state.isRemovingObject -> viewModel.handleAction(EditorAction.CancelObjectRemoval)
+                        state.isEnhancingPhoto -> viewModel.handleAction(EditorAction.CancelPhotoEnhancement)
                         else -> viewModel.handleAction(EditorAction.BackToStart)
                     }
                 }
@@ -296,6 +298,32 @@ class MainActivity : ComponentActivity() {
                         },
                         onConfirm = {
                             viewModel.handleAction(EditorAction.ConfirmObjectRemoval)
+                        }
+                    )
+                }
+
+                // Show AI photo enhancement screen
+                if (state.isEnhancingPhoto && state.currentImage != null) {
+                    AiPhotoEnhancementScreen(
+                        bitmap = state.currentImage!!,
+                        enhancementState = state.photoEnhancementState,
+                        onEnhanceClick = {
+                            viewModel.handleAction(EditorAction.RunPhotoEnhancement)
+                        },
+                        onToggleBeforeAfter = {
+                            viewModel.handleAction(EditorAction.ToggleEnhancementBeforeAfter)
+                        },
+                        onConfirm = {
+                            viewModel.handleAction(EditorAction.ConfirmPhotoEnhancement)
+                        },
+                        onUndo = {
+                            viewModel.handleAction(EditorAction.UndoPhotoEnhancement)
+                        },
+                        onCancel = {
+                            viewModel.handleAction(EditorAction.CancelPhotoEnhancement)
+                        },
+                        onClearError = {
+                            viewModel.handleAction(EditorAction.ClearEnhancementError)
                         }
                     )
                 }
@@ -560,7 +588,8 @@ fun EditorScreen(
                         "text" -> onActionClick(EditorAction.StartAddText)
                         "adjust" -> onActionClick(EditorAction.StartAdjust)
                         "ai_object_removal" -> onActionClick(EditorAction.StartObjectRemoval)
-                        "ai_enhancement" -> onActionClick(EditorAction.RestoreFace)
+                        "ai_photo_enhancement" -> onActionClick(EditorAction.StartPhotoEnhancement)
+                        "ai_face_restoration" -> onActionClick(EditorAction.RestoreFace)
                         "ai_upscaler" -> onActionClick(EditorAction.UpscaleImage)
                     }
                 },
@@ -671,7 +700,8 @@ fun EditorBottomToolbar(
         ToolItem("text", "Text", Icons.Default.TextFields),
         ToolItem("adjust", "Adjust", Icons.Default.Tune),
         ToolItem("ai_object_removal", "AI Object Removal", Icons.Default.AutoFixHigh),
-        ToolItem("ai_enhancement", "AI Photo Enhancement", Icons.Default.Face),
+        ToolItem("ai_photo_enhancement", "AI Photo Enhancement", Icons.Default.AutoAwesome),
+        ToolItem("ai_face_restoration", "AI Face Restoration", Icons.Default.Face),
         ToolItem("ai_upscaler", "AI Photo Upscaler", Icons.Default.ZoomIn)
     )
 

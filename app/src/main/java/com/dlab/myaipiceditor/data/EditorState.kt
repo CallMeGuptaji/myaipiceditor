@@ -26,7 +26,9 @@ data class EditorState(
     val adjustmentValues: AdjustmentValues = AdjustmentValues(),
     val isRemovingObject: Boolean = false,
     val objectRemovalState: ObjectRemovalState = ObjectRemovalState(),
-    val showingSaveDialog: Boolean = false
+    val showingSaveDialog: Boolean = false,
+    val isEnhancingPhoto: Boolean = false,
+    val photoEnhancementState: PhotoEnhancementState = PhotoEnhancementState()
 )
 
 data class TextPosition(
@@ -54,6 +56,13 @@ sealed class EditorAction {
     object RejectRefinedMask : EditorAction()
     object RestoreFace : EditorAction()
     object UpscaleImage : EditorAction()
+    object StartPhotoEnhancement : EditorAction()
+    object CancelPhotoEnhancement : EditorAction()
+    object ConfirmPhotoEnhancement : EditorAction()
+    object RunPhotoEnhancement : EditorAction()
+    object ToggleEnhancementBeforeAfter : EditorAction()
+    object UndoPhotoEnhancement : EditorAction()
+    object ClearEnhancementError : EditorAction()
     data class ResizeImage(val width: Int, val height: Int) : EditorAction()
     data class RotateImage(val degrees: Float) : EditorAction()
     object StartAddText : EditorAction()

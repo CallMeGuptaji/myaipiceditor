@@ -9,6 +9,7 @@ import com.dlab.myaipiceditor.ai.FaceRestoration
 import com.dlab.myaipiceditor.ai.ImageUpscaler
 import com.dlab.myaipiceditor.ai.MaskRefinement
 import com.dlab.myaipiceditor.ai.ObjectRemoval
+import com.dlab.myaipiceditor.ai.PhotoEnhancement
 import com.dlab.myaipiceditor.ai.SmartMaskSnap
 import com.dlab.myaipiceditor.data.AdjustmentType
 import com.dlab.myaipiceditor.data.AdjustmentValues
@@ -16,6 +17,7 @@ import com.dlab.myaipiceditor.data.BrushStroke
 import com.dlab.myaipiceditor.data.EditorAction
 import com.dlab.myaipiceditor.data.EditorState
 import com.dlab.myaipiceditor.data.ObjectRemovalState
+import com.dlab.myaipiceditor.data.PhotoEnhancementState
 import com.dlab.myaipiceditor.data.TextStyle
 import com.dlab.myaipiceditor.data.TextPosition
 import com.dlab.myaipiceditor.ui.CropRect
@@ -61,6 +63,13 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             is EditorAction.RejectRefinedMask -> rejectRefinedMask()
             is EditorAction.RestoreFace -> restoreFace()
             is EditorAction.UpscaleImage -> upscaleImage()
+            is EditorAction.StartPhotoEnhancement -> startPhotoEnhancement()
+            is EditorAction.CancelPhotoEnhancement -> cancelPhotoEnhancement()
+            is EditorAction.ConfirmPhotoEnhancement -> confirmPhotoEnhancement()
+            is EditorAction.RunPhotoEnhancement -> runPhotoEnhancement()
+            is EditorAction.ToggleEnhancementBeforeAfter -> toggleEnhancementBeforeAfter()
+            is EditorAction.UndoPhotoEnhancement -> undoPhotoEnhancement()
+            is EditorAction.ClearEnhancementError -> clearEnhancementError()
             is EditorAction.ResizeImage -> resizeImage(action.width, action.height)
             is EditorAction.RotateImage -> rotateImage(action.degrees)
             is EditorAction.StartAddText -> startAddText()
@@ -759,6 +768,110 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun hideSaveDialog() {
         _state.value = _state.value.copy(showingSaveDialog = false)
+    }
+
+    private fun startPhotoEnhancement() {
+        val currentImage = _state.value.currentImage ?: return
+        _state.value = _state.value.copy(
+            isEnhancingPhoto = true,
+            photoEnhancementState = PhotoEnhancementState(
+                originalBitmap = currentImage
+            )
+        )
+    }
+
+    private fun cancelPhotoEnhancement() {
+        _state.value.photoEnhancementState.enhancedBitmap?.recycle()
+        _state.value = _state.value.copy(
+            isEnhancingPhoto = false,
+            photoEnhancementState = PhotoEnhancementState()
+        )
+    }
+
+    private fun confirmPhotoEnhancement() {
+        val enhancedBitmap = _state.value.photoEnhancementState.enhancedBitmap ?: return
+
+        _state.value = _state.value.copy(
+            currentImage = enhancedBitmap,
+            isEnhancingPhoto = false,
+            photoEnhancementState = PhotoEnhancementState()
+        )
+        addToHistory(enhancedBitmap)
+    }
+
+    private fun runPhotoEnhancement() {
+        val originalBitmap = _state.value.photoEnhancementState.originalBitmap ?: return
+
+        viewModelScope.launch {
+            _state.value = _state.value.copy(
+                photoEnhancementState = _state.value.photoEnhancementState.copy(
+                    isProcessing = true,
+                    progress = 0f,
+                    error = null,
+                    enhancedBitmap = null
+                )
+            )
+
+            try {
+                withContext(Dispatchers.IO) {
+                    AiModelManager.initialize(getApplication())
+                }
+
+                val enhanced = withContext(Dispatchers.Default) {
+                    PhotoEnhancement.enhance(getApplication(), originalBitmap) { progress ->
+                        _state.value = _state.value.copy(
+                            photoEnhancementState = _state.value.photoEnhancementState.copy(
+                                progress = progress
+                            )
+                        )
+                    }
+                }
+
+                _state.value = _state.value.copy(
+                    photoEnhancementState = _state.value.photoEnhancementState.copy(
+                        enhancedBitmap = enhanced,
+                        isProcessing = false,
+                        progress = 1.0f,
+                        showBeforeAfter = true
+                    )
+                )
+
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(
+                    photoEnhancementState = _state.value.photoEnhancementState.copy(
+                        isProcessing = false,
+                        progress = 0f,
+                        error = "Enhancement failed: ${e.message}"
+                    )
+                )
+            }
+        }
+    }
+
+    private fun toggleEnhancementBeforeAfter() {
+        _state.value = _state.value.copy(
+            photoEnhancementState = _state.value.photoEnhancementState.copy(
+                showBeforeAfter = !_state.value.photoEnhancementState.showBeforeAfter
+            )
+        )
+    }
+
+    private fun undoPhotoEnhancement() {
+        _state.value.photoEnhancementState.enhancedBitmap?.recycle()
+        val originalBitmap = _state.value.photoEnhancementState.originalBitmap
+        _state.value = _state.value.copy(
+            photoEnhancementState = PhotoEnhancementState(
+                originalBitmap = originalBitmap
+            )
+        )
+    }
+
+    private fun clearEnhancementError() {
+        _state.value = _state.value.copy(
+            photoEnhancementState = _state.value.photoEnhancementState.copy(
+                error = null
+            )
+        )
     }
 
 }
