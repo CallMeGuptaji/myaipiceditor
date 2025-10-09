@@ -5,7 +5,9 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.util.Log
 import ai.onnxruntime.OnnxTensor
+import ai.onnxruntime.OrtSession
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.nio.FloatBuffer
 import kotlin.math.ceil
@@ -14,14 +16,18 @@ import kotlin.math.pow
 
 object PhotoEnhancement {
     private const val TAG = "PhotoEnhancement"
-    private const val TILE_SIZE = 128
-    private const val OVERLAP = 16
+    private const val TILE_SIZE = 256  // EDSR works well with larger tiles
+    private const val UPSCALE_FACTOR = 2  // EDSR 2x model
 
     suspend fun enhance(
         context: Context,
         input: Bitmap,
         onProgress: (Float) -> Unit = {}
     ): Bitmap = withContext(Dispatchers.Default) {
+        var scaledInput: Bitmap? = null
+        var result: Bitmap? = null
+        var finalResult: Bitmap? = null
+
         try {
             Log.d(TAG, "Starting photo enhancement: ${input.width}x${input.height}")
             onProgress(0.05f)
@@ -31,12 +37,12 @@ object PhotoEnhancement {
 
             onProgress(0.1f)
 
-            val scaledInput = resizeForProcessing(input)
+            scaledInput = resizeForProcessing(input)
             Log.d(TAG, "Processing size: ${scaledInput.width}x${scaledInput.height}")
 
-            val outputWidth = scaledInput.width * 4
-            val outputHeight = scaledInput.height * 4
-            val result = Bitmap.createBitmap(outputWidth, outputHeight, Bitmap.Config.ARGB_8888)
+            val outputWidth = scaledInput.width * UPSCALE_FACTOR
+            val outputHeight = scaledInput.height * UPSCALE_FACTOR
+            result = Bitmap.createBitmap(outputWidth, outputHeight, Bitmap.Config.ARGB_8888)
 
             val tilesX = ceil(scaledInput.width.toFloat() / TILE_SIZE).toInt()
             val tilesY = ceil(scaledInput.height.toFloat() / TILE_SIZE).toInt()
@@ -49,54 +55,35 @@ object PhotoEnhancement {
 
             for (tileY in 0 until tilesY) {
                 for (tileX in 0 until tilesX) {
-                    val startX = (tileX * TILE_SIZE).coerceAtMost(scaledInput.width - TILE_SIZE)
-                    val startY = (tileY * TILE_SIZE).coerceAtMost(scaledInput.height - TILE_SIZE)
-                    val tileWidth = TILE_SIZE.coerceAtMost(scaledInput.width - startX)
-                    val tileHeight = TILE_SIZE.coerceAtMost(scaledInput.height - startY)
-
-                    val tile = Bitmap.createBitmap(scaledInput, startX, startY, tileWidth, tileHeight)
-
-                    val inputTensor = preprocessImage(tile, ortEnvironment)
-                    val outputs = session.run(mapOf("input" to inputTensor))
-                    val outputTensor = outputs[0].value as Array<Array<Array<FloatArray>>>
-
-                    inputTensor.close()
-                    outputs.close()
-
-                    val enhancedTile = postprocessImage(outputTensor, tileWidth * 4, tileHeight * 4)
-
-                    val destX = startX * 4
-                    val destY = startY * 4
-
-                    for (y in 0 until enhancedTile.height) {
-                        for (x in 0 until enhancedTile.width) {
-                            val pixel = enhancedTile.getPixel(x, y)
-                            if (destX + x < outputWidth && destY + y < outputHeight) {
-                                result.setPixel(destX + x, destY + y, pixel)
-                            }
-                        }
-                    }
-
-                    tile.recycle()
-                    enhancedTile.recycle()
+                    // Process tile with proper resource cleanup
+                    processTile(
+                        scaledInput, result, session, ortEnvironment,
+                        tileX, tileY
+                    )
 
                     processedTiles++
                     val progress = 0.15f + (processedTiles.toFloat() / totalTiles) * 0.70f
                     onProgress(progress)
 
-                    System.gc()
+                    // Gentle GC every few tiles
+                    if (processedTiles % 3 == 0) {
+                        System.gc()
+                        delay(30)
+                    }
                 }
             }
 
             if (scaledInput != input) {
                 scaledInput.recycle()
+                scaledInput = null
             }
 
             onProgress(0.90f)
 
-            val finalResult = resizeToOriginalAspect(result, input.width, input.height)
+            finalResult = resizeToOriginalAspect(result, input.width, input.height)
             if (finalResult != result) {
                 result.recycle()
+                result = null
             }
 
             onProgress(0.95f)
@@ -104,6 +91,7 @@ object PhotoEnhancement {
             val improvedResult = applyEnhancementBoost(finalResult)
             if (improvedResult != finalResult) {
                 finalResult.recycle()
+                finalResult = null
             }
 
             onProgress(1.0f)
@@ -112,12 +100,88 @@ object PhotoEnhancement {
             improvedResult
         } catch (e: Exception) {
             Log.e(TAG, "Enhancement failed: ${e.message}", e)
+            // Clean up resources on error
+            scaledInput?.recycle()
+            result?.recycle()
+            finalResult?.recycle()
             throw e
         }
     }
 
+    private fun processTile(
+        scaledInput: Bitmap,
+        result: Bitmap,
+        session: ai.onnxruntime.OrtSession,
+        ortEnvironment: ai.onnxruntime.OrtEnvironment,
+        tileX: Int,
+        tileY: Int
+    ) {
+        var tile: Bitmap? = null
+        var inputTensor: OnnxTensor? = null
+        var outputs: OrtSession.Result? = null
+        var enhancedTile: Bitmap? = null
+
+        try {
+            // Calculate tile boundaries
+            val startX = (tileX * TILE_SIZE).coerceIn(0, scaledInput.width - 1)
+            val startY = (tileY * TILE_SIZE).coerceIn(0, scaledInput.height - 1)
+
+            // Calculate actual tile dimensions from source
+            val actualWidth = TILE_SIZE.coerceAtMost(scaledInput.width - startX)
+            val actualHeight = TILE_SIZE.coerceAtMost(scaledInput.height - startY)
+
+            // Ensure valid dimensions
+            if (actualWidth <= 0 || actualHeight <= 0) {
+                Log.w(TAG, "Skipping invalid tile at ($tileX, $tileY)")
+                return
+            }
+
+            // Extract tile from source
+            tile = Bitmap.createBitmap(scaledInput, startX, startY, actualWidth, actualHeight)
+
+            // EDSR can handle variable input sizes, no padding needed
+            inputTensor = preprocessImage(tile, ortEnvironment)
+            outputs = session.run(mapOf("input" to inputTensor))
+
+            // EDSR output tensor format
+            val outputTensor = outputs?.get(0)?.value as Array<Array<Array<FloatArray>>>
+
+            // Process output (2x upscaled)
+            enhancedTile = postprocessImage(outputTensor, actualWidth * UPSCALE_FACTOR, actualHeight * UPSCALE_FACTOR)
+
+            val destX = startX * UPSCALE_FACTOR
+            val destY = startY * UPSCALE_FACTOR
+
+            // Copy to result
+            copyTileToResult(enhancedTile, result, destX, destY)
+
+        } finally {
+            // CRITICAL: Clean up all resources
+            tile?.recycle()
+            inputTensor?.close()
+            outputs?.close()
+            enhancedTile?.recycle()
+        }
+    }
+
+    private fun copyTileToResult(tile: Bitmap, result: Bitmap, destX: Int, destY: Int) {
+        val tilePixels = IntArray(tile.width * tile.height)
+        tile.getPixels(tilePixels, 0, tile.width, 0, 0, tile.width, tile.height)
+
+        for (y in 0 until tile.height) {
+            for (x in 0 until tile.width) {
+                val dx = destX + x
+                val dy = destY + y
+                if (dx < result.width && dy < result.height) {
+                    result.setPixel(dx, dy, tilePixels[y * tile.width + x])
+                }
+            }
+        }
+    }
+
     private fun resizeForProcessing(bitmap: Bitmap): Bitmap {
-        val maxDimension = 384
+        // EDSR is more efficient, can handle larger inputs
+        val maxDimension = 512  // Much better than Real-ESRGAN
         val width = bitmap.width
         val height = bitmap.height
 
@@ -139,6 +203,7 @@ object PhotoEnhancement {
 
         val floatBuffer = FloatBuffer.allocate(1 * 3 * height * width)
 
+        // EDSR expects normalized RGB values [0, 1]
         for (c in 0 until 3) {
             for (y in 0 until height) {
                 for (x in 0 until width) {
@@ -164,21 +229,24 @@ object PhotoEnhancement {
 
     private fun postprocessImage(output: Array<Array<Array<FloatArray>>>, width: Int, height: Int): Bitmap {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val pixels = IntArray(width * height)
 
         val rChannel = output[0][0]
         val gChannel = output[0][1]
         val bChannel = output[0][2]
 
+        // Convert back from normalized values
         for (y in 0 until height) {
             for (x in 0 until width) {
                 val r = (rChannel[y][x].coerceIn(0f, 1f) * 255).toInt()
                 val g = (gChannel[y][x].coerceIn(0f, 1f) * 255).toInt()
                 val b = (bChannel[y][x].coerceIn(0f, 1f) * 255).toInt()
 
-                bitmap.setPixel(x, y, Color.rgb(r, g, b))
+                pixels[y * width + x] = Color.rgb(r, g, b)
             }
         }
 
+        bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
         return bitmap
     }
 
@@ -200,40 +268,45 @@ object PhotoEnhancement {
 
     private fun applyEnhancementBoost(bitmap: Bitmap): Bitmap {
         val result = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val width = result.width
+        val height = result.height
+        val pixels = IntArray(width * height)
+        result.getPixels(pixels, 0, width, 0, 0, width, height)
 
-        val contrastFactor = 1.1f
-        val gamma = 0.95f
-        val saturationBoost = 1.15f
+        // Gentler enhancement for EDSR output
+        val contrastFactor = 1.05f
+        val gamma = 0.98f
+        val saturationBoost = 1.08f
 
-        for (y in 0 until result.height) {
-            for (x in 0 until result.width) {
-                val pixel = result.getPixel(x, y)
+        // Process pixels in batch
+        for (i in pixels.indices) {
+            val pixel = pixels[i]
 
-                var r = Color.red(pixel) / 255.0f
-                var g = Color.green(pixel) / 255.0f
-                var b = Color.blue(pixel) / 255.0f
+            var r = Color.red(pixel) / 255.0f
+            var g = Color.green(pixel) / 255.0f
+            var b = Color.blue(pixel) / 255.0f
 
-                r = ((r - 0.5f) * contrastFactor + 0.5f).coerceIn(0f, 1f)
-                g = ((g - 0.5f) * contrastFactor + 0.5f).coerceIn(0f, 1f)
-                b = ((b - 0.5f) * contrastFactor + 0.5f).coerceIn(0f, 1f)
+            r = ((r - 0.5f) * contrastFactor + 0.5f).coerceIn(0f, 1f)
+            g = ((g - 0.5f) * contrastFactor + 0.5f).coerceIn(0f, 1f)
+            b = ((b - 0.5f) * contrastFactor + 0.5f).coerceIn(0f, 1f)
 
-                r = r.pow(gamma)
-                g = g.pow(gamma)
-                b = b.pow(gamma)
+            r = r.pow(gamma)
+            g = g.pow(gamma)
+            b = b.pow(gamma)
 
-                val gray = 0.299f * r + 0.587f * g + 0.114f * b
-                r = (gray + (r - gray) * saturationBoost).coerceIn(0f, 1f)
-                g = (gray + (g - gray) * saturationBoost).coerceIn(0f, 1f)
-                b = (gray + (b - gray) * saturationBoost).coerceIn(0f, 1f)
+            val gray = 0.299f * r + 0.587f * g + 0.114f * b
+            r = (gray + (r - gray) * saturationBoost).coerceIn(0f, 1f)
+            g = (gray + (g - gray) * saturationBoost).coerceIn(0f, 1f)
+            b = (gray + (b - gray) * saturationBoost).coerceIn(0f, 1f)
 
-                val newR = (r * 255).toInt()
-                val newG = (g * 255).toInt()
-                val newB = (b * 255).toInt()
+            val newR = (r * 255).toInt()
+            val newG = (g * 255).toInt()
+            val newB = (b * 255).toInt()
 
-                result.setPixel(x, y, Color.rgb(newR, newG, newB))
-            }
+            pixels[i] = Color.rgb(newR, newG, newB)
         }
 
+        result.setPixels(pixels, 0, width, 0, 0, width, height)
         return result
     }
 }
