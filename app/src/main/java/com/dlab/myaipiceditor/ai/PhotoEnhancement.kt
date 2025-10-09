@@ -8,14 +8,14 @@ import ai.onnxruntime.OnnxTensor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.FloatBuffer
-import kotlin.math.max
+import kotlin.math.ceil
 import kotlin.math.min
 import kotlin.math.pow
 
 object PhotoEnhancement {
     private const val TAG = "PhotoEnhancement"
-    private const val TARGET_SIZE = 512
-    private const val MAX_SIZE = 1024
+    private const val TILE_SIZE = 128
+    private const val OVERLAP = 16
 
     suspend fun enhance(
         context: Context,
@@ -24,40 +24,82 @@ object PhotoEnhancement {
     ): Bitmap = withContext(Dispatchers.Default) {
         try {
             Log.d(TAG, "Starting photo enhancement: ${input.width}x${input.height}")
-            onProgress(0.1f)
+            onProgress(0.05f)
 
             val session = AiModelManager.getSession(AiModelManager.ModelType.IMAGE_UPSCALER)
             val ortEnvironment = AiModelManager.getEnvironment()
 
-            onProgress(0.2f)
+            onProgress(0.1f)
 
             val scaledInput = resizeForProcessing(input)
-            Log.d(TAG, "Resized to: ${scaledInput.width}x${scaledInput.height}")
-            onProgress(0.3f)
+            Log.d(TAG, "Processing size: ${scaledInput.width}x${scaledInput.height}")
 
-            val inputTensor = preprocessImage(scaledInput, ortEnvironment)
-            onProgress(0.4f)
+            val outputWidth = scaledInput.width * 4
+            val outputHeight = scaledInput.height * 4
+            val result = Bitmap.createBitmap(outputWidth, outputHeight, Bitmap.Config.ARGB_8888)
 
-            Log.d(TAG, "Running ESRGAN inference...")
-            val outputs = session.run(mapOf("image" to inputTensor))
-            onProgress(0.7f)
+            val tilesX = ceil(scaledInput.width.toFloat() / TILE_SIZE).toInt()
+            val tilesY = ceil(scaledInput.height.toFloat() / TILE_SIZE).toInt()
+            val totalTiles = tilesX * tilesY
 
-            val outputTensor = outputs[0].value as Array<Array<Array<FloatArray>>>
-            inputTensor.close()
-            outputs.close()
+            Log.d(TAG, "Processing ${totalTiles} tiles (${tilesX}x${tilesY})")
+            onProgress(0.15f)
 
-            Log.d(TAG, "Post-processing output...")
-            val enhanced = postprocessImage(outputTensor, scaledInput.width * 4, scaledInput.height * 4)
-            onProgress(0.85f)
+            var processedTiles = 0
+
+            for (tileY in 0 until tilesY) {
+                for (tileX in 0 until tilesX) {
+                    val startX = (tileX * TILE_SIZE).coerceAtMost(scaledInput.width - TILE_SIZE)
+                    val startY = (tileY * TILE_SIZE).coerceAtMost(scaledInput.height - TILE_SIZE)
+                    val tileWidth = TILE_SIZE.coerceAtMost(scaledInput.width - startX)
+                    val tileHeight = TILE_SIZE.coerceAtMost(scaledInput.height - startY)
+
+                    val tile = Bitmap.createBitmap(scaledInput, startX, startY, tileWidth, tileHeight)
+
+                    val inputTensor = preprocessImage(tile, ortEnvironment)
+                    val outputs = session.run(mapOf("input" to inputTensor))
+                    val outputTensor = outputs[0].value as Array<Array<Array<FloatArray>>>
+
+                    inputTensor.close()
+                    outputs.close()
+
+                    val enhancedTile = postprocessImage(outputTensor, tileWidth * 4, tileHeight * 4)
+
+                    val destX = startX * 4
+                    val destY = startY * 4
+
+                    for (y in 0 until enhancedTile.height) {
+                        for (x in 0 until enhancedTile.width) {
+                            val pixel = enhancedTile.getPixel(x, y)
+                            if (destX + x < outputWidth && destY + y < outputHeight) {
+                                result.setPixel(destX + x, destY + y, pixel)
+                            }
+                        }
+                    }
+
+                    tile.recycle()
+                    enhancedTile.recycle()
+
+                    processedTiles++
+                    val progress = 0.15f + (processedTiles.toFloat() / totalTiles) * 0.70f
+                    onProgress(progress)
+
+                    System.gc()
+                }
+            }
 
             if (scaledInput != input) {
                 scaledInput.recycle()
             }
 
-            val finalResult = resizeToOriginalAspect(enhanced, input.width, input.height)
-            if (finalResult != enhanced) {
-                enhanced.recycle()
+            onProgress(0.90f)
+
+            val finalResult = resizeToOriginalAspect(result, input.width, input.height)
+            if (finalResult != result) {
+                result.recycle()
             }
+
+            onProgress(0.95f)
 
             val improvedResult = applyEnhancementBoost(finalResult)
             if (improvedResult != finalResult) {
@@ -69,35 +111,25 @@ object PhotoEnhancement {
 
             improvedResult
         } catch (e: Exception) {
-            Log.e(TAG, "Enhancement failed", e)
+            Log.e(TAG, "Enhancement failed: ${e.message}", e)
             throw e
         }
     }
 
     private fun resizeForProcessing(bitmap: Bitmap): Bitmap {
+        val maxDimension = 384
         val width = bitmap.width
         val height = bitmap.height
 
-        if (width <= MAX_SIZE && height <= MAX_SIZE) {
-            val targetDim = if (width > height) {
-                if (width <= TARGET_SIZE) return bitmap
-                TARGET_SIZE
-            } else {
-                if (height <= TARGET_SIZE) return bitmap
-                TARGET_SIZE
-            }
-
-            val scale = targetDim.toFloat() / max(width, height)
-            val newWidth = (width * scale).toInt()
-            val newHeight = (height * scale).toInt()
-
-            return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+        if (width <= maxDimension && height <= maxDimension) {
+            return bitmap
         }
 
-        val scale = MAX_SIZE.toFloat() / max(width, height)
+        val scale = maxDimension.toFloat() / kotlin.math.max(width, height)
         val newWidth = (width * scale).toInt()
         val newHeight = (height * scale).toInt()
 
+        Log.d(TAG, "Resizing from ${width}x${height} to ${newWidth}x${newHeight}")
         return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
     }
 
@@ -107,24 +139,20 @@ object PhotoEnhancement {
 
         val floatBuffer = FloatBuffer.allocate(1 * 3 * height * width)
 
-        val rChannel = FloatArray(height * width)
-        val gChannel = FloatArray(height * width)
-        val bChannel = FloatArray(height * width)
-
-        for (y in 0 until height) {
-            for (x in 0 until width) {
-                val pixel = bitmap.getPixel(x, y)
-                val idx = y * width + x
-
-                rChannel[idx] = Color.red(pixel) / 255.0f
-                gChannel[idx] = Color.green(pixel) / 255.0f
-                bChannel[idx] = Color.blue(pixel) / 255.0f
+        for (c in 0 until 3) {
+            for (y in 0 until height) {
+                for (x in 0 until width) {
+                    val pixel = bitmap.getPixel(x, y)
+                    val value = when (c) {
+                        0 -> Color.red(pixel) / 255.0f
+                        1 -> Color.green(pixel) / 255.0f
+                        else -> Color.blue(pixel) / 255.0f
+                    }
+                    floatBuffer.put(value)
+                }
             }
         }
 
-        floatBuffer.put(rChannel)
-        floatBuffer.put(gChannel)
-        floatBuffer.put(bChannel)
         floatBuffer.rewind()
 
         return OnnxTensor.createTensor(
