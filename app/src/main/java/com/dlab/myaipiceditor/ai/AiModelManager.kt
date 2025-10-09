@@ -26,7 +26,7 @@ object AiModelManager {
     enum class ModelType(val fileName: String) {
         FACE_RESTORATION("GFPGANv1.4.onnx"),
         OBJECT_REMOVAL("lama.onnx"),
-        IMAGE_UPSCALER("Real_ESRGAN_x4plus.onnx"),
+        IMAGE_UPSCALER("edsr_onnxsim_2x.onnx"),
         FOR_SEGMENTATION("u2net.onnx")
     }
 
