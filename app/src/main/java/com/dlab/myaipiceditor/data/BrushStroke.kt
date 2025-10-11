@@ -10,7 +10,7 @@ data class BrushStroke(
 
 data class ObjectRemovalState(
     val strokes: List<BrushStroke> = emptyList(),
-    val brushSize: Float = 30f,
+    val brushSize: Float = 20f,
     val isEraserMode: Boolean = false,
     val canUndo: Boolean = false,
     val canRedo: Boolean = false,
@@ -19,7 +19,7 @@ data class ObjectRemovalState(
     val isRefiningMask: Boolean = false,
     val refinedMaskPreview: android.graphics.Bitmap? = null,
     val showRefinedPreview: Boolean = false,
-    val showStrokes: Boolean = false,
+    val showStrokes: Boolean = true,
     val livePreviewOverlay: android.graphics.Bitmap? = null,
     val showLivePreview: Boolean = false
 )
